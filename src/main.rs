@@ -1,12 +1,16 @@
 use clap::Parser;
 
+use crate::synth::{Params, Synth};
+
 mod lpc;
+mod synth;
 
 #[derive(Parser, Debug)]
 enum Cmd {
     Clip(Clip),
     Lpc(Lpc),
-} 
+    Synth(SynthCmd),
+}
 
 #[derive(Parser, Debug)]
 struct Clip {
@@ -24,6 +28,15 @@ struct Lpc {
     #[arg(short, long)]
     #[clap(default_value = "0.9375")]
     preemph: f64,
+    #[arg(short, long)]
+    out_file: Option<String>,
+}
+
+#[derive(Parser, Debug)]
+struct SynthCmd {
+    //#[arg(short, long)]
+    out_file: String,
+    coeffs: String,
 }
 
 fn read_wav(filename: String) -> (hound::WavSpec, Vec<i16>) {
@@ -53,7 +66,6 @@ fn main_clip(args: Clip) {
         }
     }
     writer.finalize().unwrap();
-
 }
 
 fn main_lpc(args: Lpc) {
@@ -68,7 +80,7 @@ fn main_lpc(args: Lpc) {
     for i in 0..n_chunks {
         let window = &preemph[istart + i * FRAME_SIZE..][..WINDOW_SIZE];
         let coeffs = lpc::Reflector::new(&window);
-        println!("{:.3?}", coeffs.ks());
+        println!("{:.3?} {:.3}", coeffs.ks(), coeffs.rms());
     }
 }
 
@@ -78,11 +90,35 @@ fn preemph(inp: &[f64], a: f64) -> Vec<f64> {
         .collect()
 }
 
+fn main_synth(args: SynthCmd) {
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 16_000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(args.out_file, spec).unwrap();
+    let mut synth = Synth::new(args.coeffs.len());
+    let k = args
+        .coeffs
+        .split(',')
+        .map(|arg| arg.trim().parse().unwrap())
+        .collect();
+    let params = Params { k, period: 140 };
+    for _ in 0..16_000 {
+        let y = synth.get_sample(&params);
+        let yi = (y * 16384.).clamp(-32768.0, 32767.) as i16;
+        writer.write_sample(yi).unwrap();
+    }
+    writer.finalize().unwrap();
+}
+
 fn main() {
     let cmd = Cmd::parse();
     println!("{cmd:?}");
     match cmd {
         Cmd::Clip(args) => main_clip(args),
         Cmd::Lpc(lpc) => main_lpc(lpc),
+        Cmd::Synth(synth) => main_synth(synth),
     }
 }

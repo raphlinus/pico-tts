@@ -1,4 +1,4 @@
-const ORDER: usize = 10;
+const ORDER: usize = 18;
 
 #[derive(Default)]
 pub struct Reflector {
@@ -18,6 +18,7 @@ fn get_correlations(buf: &[f64]) -> [f64; ORDER + 1] {
     core::array::from_fn(|lag| get_correlation(buf, lag))
 }
 
+#[allow(unused)]
 pub fn confidence(buf: &[f64], period: usize) -> f64 {
     get_correlation(buf, period) / get_correlation(buf, 0)
 }
@@ -49,9 +50,10 @@ impl Reflector {
             d[i + 1] = d[i] + self.ks[i] * y;
             d[i] = b[i];
         }
-        self.rms = d[ORDER] / n_samples as f64;
+        self.rms = (d[ORDER] / n_samples as f64).sqrt();
     }
 
+    #[allow(unused)]
     pub fn is_unvoiced(&self) -> bool {
         const UNVOICED_THRESHOLD: f64 = 0.3;
         self.ks[1] > UNVOICED_THRESHOLD

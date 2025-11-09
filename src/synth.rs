@@ -15,7 +15,7 @@ impl Synth {
     pub fn new(n: usize) -> Self {
         Self {
             y: 0.0,
-            x: vec![0.0; n],
+            x: vec![0.0; n + 1],
             phase: 0,
         }
     }

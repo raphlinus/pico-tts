@@ -7,6 +7,7 @@ pub struct Phoneme {
     pub rms: f64,
 }
 
+#[derive(PartialEq)]
 pub enum Kind {
     Vowel,
     Fricative,
@@ -122,7 +123,7 @@ const PHONEMES: &[(&'static str, Phoneme)] = &[
                 -0.787, -0.530, -0.307, 0.157, -0.177, 0.138, -0.289, 0.152, -0.006, 0.176, 0.114,
                 0.106, 0.081, 0.089, 0.007, -0.029, -0.073, -0.050,
             ],
-            48.,
+            100.,
         ),
     ),
     (
@@ -154,4 +155,26 @@ pub fn get_phoneme(s: &str) -> Option<&'static Phoneme> {
         }
     }
     None
+}
+
+pub fn parse(s: &str) -> Vec<&'static Phoneme> {
+    let mut result = Vec::new();
+    let mut i = 0;
+    while i < s.len() {
+        for j in (1..=3).rev() {
+            let mut end = i;
+            for _ in 0..j {
+                end = s.ceil_char_boundary(end + 1);
+            }
+            if let Some(phoneme) = get_phoneme(&s[i..end]) {
+                result.push(phoneme);
+                i = end;
+                break;
+            }
+            if j == 1 {
+                i = end;
+            }
+        }
+    }
+    result
 }

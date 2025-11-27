@@ -7,6 +7,7 @@ use crate::{
 
 mod lpc;
 mod phonemes;
+mod sequence;
 mod synth;
 
 #[derive(Parser, Debug)]
@@ -15,6 +16,7 @@ enum Cmd {
     Lpc(Lpc),
     Synth(SynthCmd),
     Phoneme(PhonemeCmd),
+    Seq(SeqCmd),
 }
 
 #[derive(Parser, Debug)]
@@ -51,6 +53,13 @@ struct PhonemeCmd {
     //#[arg(short, long)]
     out_file: String,
     phoneme: String,
+}
+
+#[derive(Parser, Debug)]
+struct SeqCmd {
+    //#[arg(short, long)]
+    out_file: String,
+    phonemes: String,
 }
 
 fn read_wav(filename: String) -> (hound::WavSpec, Vec<i16>) {
@@ -198,6 +207,23 @@ fn main_phoneme(args: PhonemeCmd) {
     writer.finalize().unwrap();
 }
 
+fn main_seq(args: SeqCmd) {
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 16_000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(args.out_file, spec).unwrap();
+    let phonemes = crate::phonemes::parse(&args.phonemes);
+    let mut seq = crate::sequence::Sequence::new(phonemes);
+    while let Some(y) = seq.get() {
+        let yi = (y * 16384.).clamp(-32768.0, 32767.) as i16;
+        writer.write_sample(yi).unwrap();
+    }
+    writer.finalize().unwrap();
+}
+
 fn main() {
     let cmd = Cmd::parse();
     println!("{cmd:?}");
@@ -206,5 +232,6 @@ fn main() {
         Cmd::Lpc(lpc) => main_lpc(lpc),
         Cmd::Synth(synth) => main_synth(synth),
         Cmd::Phoneme(phoneme) => main_phoneme(phoneme),
+        Cmd::Seq(seq) => main_seq(seq),
     }
 }

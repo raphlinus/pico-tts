@@ -4,6 +4,7 @@ pub struct Synth {
     y: f64,
     x: Vec<f64>,
     phase: u16,
+    rand: u16,
 }
 
 pub struct Params {
@@ -17,7 +18,8 @@ impl Synth {
         Self {
             y: 0.0,
             x: vec![0.0; n + 1],
-            phase: 1,
+            phase: 0,
+            rand: 1,
         }
     }
 
@@ -30,12 +32,12 @@ impl Synth {
             u = self.y;
             self.y *= EMPH;
             self.phase += 1;
-            if self.phase == params.period {
+            if self.phase >= params.period {
                 self.phase = 0;
             }
         } else {
-            self.phase = (self.phase >> 1) ^ if (self.phase & 1) != 0 { 0xb800 } else { 0 };
-            u = if (self.phase & 1) != 0 { 1.0 } else { -1.0 };
+            self.rand = (self.rand >> 1) ^ if (self.rand & 1) != 0 { 0xb800 } else { 0 };
+            u = if (self.rand & 1) != 0 { 1.0 } else { -1.0 };
         }
         u *= params.rms;
         let n = params.k.len();
@@ -45,5 +47,21 @@ impl Synth {
         }
         self.x[0] = u;
         u
+    }
+}
+
+impl Params {
+    pub fn lerp(&self, other: &Params, t: f64) -> Self {
+        let mt = 1. - t;
+        Self {
+            k: self
+                .k
+                .iter()
+                .zip(&other.k)
+                .map(|(a, b)| a * mt + b * t)
+                .collect(),
+            period: (self.period as f64 * mt + other.period as f64 * t) as u16,
+            rms: self.rms as f64 * mt + other.rms * t,
+        }
     }
 }

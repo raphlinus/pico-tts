@@ -34,7 +34,7 @@ impl Env {
         }
         ix -= self.sustain_len;
         if ix < self.decay_len {
-            return self.sustain_level * (1.0 - ix as f64 / self.release_len as f64);
+            return self.sustain_level * (1.0 - ix as f64 / self.decay_len as f64);
         }
         0.0
     }
@@ -75,7 +75,8 @@ impl<T: AsRef<[&'static Phoneme]>> Sequence<T> {
         let rms = phoneme.rms * VOLUME;
         let params = Params { k, period, rms };
         if let Some(next) = seq.get(self.ix + 1) {
-            if phoneme.kind == Kind::Vowel && phoneme.kind == next.kind && self.env_ix >= 600 {
+            let blend = phoneme.kind.blends(next.kind);
+            if blend > 0.0 && self.env_ix >= 600 {
                 let next_k = next.ks.to_vec();
                 let next_rms = next.rms * VOLUME;
                 let next_params = Params {
@@ -84,12 +85,13 @@ impl<T: AsRef<[&'static Phoneme]>> Sequence<T> {
                     rms: next_rms,
                 };
                 let t = (self.env_ix - 600) as f64 / BLEND_LEN as f64;
+                let t = (0.5 + (t - 0.5) / blend).clamp(0., 1.);
                 let blend_params = params.lerp(&next_params, t);
                 let y = self.synth.get_sample(&blend_params);
                 self.env_ix += 1;
                 if self.env_ix == 600 + BLEND_LEN {
                     self.ix += 1;
-                    self.env_ix = 1600;
+                    self.env_ix = 600;
                 }
                 return Some(y * 0.9);
             }

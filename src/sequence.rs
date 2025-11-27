@@ -44,7 +44,7 @@ impl Env {
     }
 }
 
-const VOLUME: f64 = 1e-3;
+const VOLUME: f64 = 5e-4;
 const BLEND_LEN: usize = 1500;
 
 impl<T: AsRef<[&'static Phoneme]>> Sequence<T> {
@@ -74,6 +74,9 @@ impl<T: AsRef<[&'static Phoneme]>> Sequence<T> {
         let period = if phoneme.voiced { 140 } else { 0 };
         let rms = phoneme.rms * VOLUME;
         let params = Params { k, period, rms };
+        if self.env_ix == 0 {
+            self.env = self.env_for_phoneme(phoneme);
+        }
         if let Some(next) = seq.get(self.ix + 1) {
             let blend = phoneme.kind.blends(next.kind);
             if blend > 0.0 && self.env_ix >= 600 {
@@ -105,5 +108,24 @@ impl<T: AsRef<[&'static Phoneme]>> Sequence<T> {
             self.env_ix = 0;
         }
         Some(y * env_level)
+    }
+
+    fn env_for_phoneme(&self, phoneme: &Phoneme) -> Env {
+        match phoneme.kind {
+            Kind::Plosive => Env {
+                attack_len: 160,
+                decay_len: 160,
+                sustain_level: 0.3,
+                sustain_len: 1,
+                release_len: 320,
+            },
+            _ => Env {
+                attack_len: 500,
+                decay_len: 100,
+                sustain_level: 0.9,
+                sustain_len: 1000,
+                release_len: 500,
+            },
+        }
     }
 }

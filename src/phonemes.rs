@@ -2,20 +2,34 @@ use std::borrow::Cow;
 
 pub struct Phoneme {
     pub kind: Kind,
+    pub voiced: bool,
     pub ks: Cow<'static, [f64]>,
     pub rms: f64,
 }
 
 pub enum Kind {
     Vowel,
+    Fricative,
 }
+
+const UNVOICED_MUL: f64 = 0.1;
 
 impl Phoneme {
     const fn vowel(ks: &'static [f64], rms: f64) -> Self {
         Self {
             kind: Kind::Vowel,
+            voiced: true,
             ks: Cow::Borrowed(ks),
             rms,
+        }
+    }
+
+    const fn fricative(ks: &'static [f64], rms: f64) -> Self {
+        Self {
+            kind: Kind::Fricative,
+            voiced: false,
+            ks: Cow::Borrowed(ks),
+            rms: rms * UNVOICED_MUL,
         }
     }
 }
@@ -79,6 +93,56 @@ const PHONEMES: &[(&'static str, Phoneme)] = &[
                 -0.032, 0.014, 0.151, 0.228, 0.455, -0.122, 0.037,
             ],
             374.,
+        ),
+    ),
+    (
+        "s",
+        Phoneme::fricative(
+            &[
+                0.574, 0.642, 0.565, 0.303, -0.387, -0.323, -0.332, -0.061, -0.082, 0.162, 0.059,
+                0.155, -0.059, 0.158, 0.021, 0.235, 0.063, 0.134,
+            ],
+            466.,
+        ),
+    ),
+    (
+        "f",
+        Phoneme::fricative(
+            &[
+                0.179, 0.265, -0.231, 0.048, -0.014, 0.053, -0.141, 0.066, -0.091, 0.072, -0.081,
+                -0.088, -0.132, 0.020, -0.092, 0.136, -0.033, 0.007,
+            ],
+            101.,
+        ),
+    ),
+    (
+        "θ",
+        Phoneme::fricative(
+            &[
+                -0.787, -0.530, -0.307, 0.157, -0.177, 0.138, -0.289, 0.152, -0.006, 0.176, 0.114,
+                0.106, 0.081, 0.089, 0.007, -0.029, -0.073, -0.050,
+            ],
+            48.,
+        ),
+    ),
+    (
+        "ʃ",
+        Phoneme::fricative(
+            &[
+                0.137, 0.413, 0.158, 0.557, 0.087, 0.172, -0.284, -0.045, -0.287, -0.149, -0.338,
+                -0.127, -0.190, -0.010, -0.119, 0.002, 0.036, 0.225,
+            ],
+            498.,
+        ),
+    ),
+    (
+        "h",
+        Phoneme::fricative(
+            &[
+                -0.973, 0.409, -0.331, 0.143, -0.237, 0.168, -0.134, -0.183, -0.079, 0.195, 0.061,
+                -0.010, -0.054, -0.138, 0.172, 0.061, -0.224, 0.074,
+            ],
+            59.,
         ),
     ),
 ];

@@ -35,6 +35,8 @@ struct Lpc {
     preemph: f64,
     #[arg(short, long)]
     out_file: Option<String>,
+    #[arg(short, long)]
+    voiced: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -84,6 +86,7 @@ fn main_lpc(args: Lpc) {
     let (spec, samples) = read_wav(args.audio_file);
     let samples_f64 = samples.iter().map(|x| *x as f64).collect::<Vec<_>>();
     let preemph = preemph(&samples_f64, args.preemph);
+    let after_preemph = if args.voiced { &preemph } else { &samples_f64 };
     let istart = (spec.sample_rate as f64 * args.start).round() as usize;
     let iend = (spec.sample_rate as f64 * args.end).round() as usize;
     const FRAME_SIZE: usize = 400;
@@ -102,14 +105,16 @@ fn main_lpc(args: Lpc) {
     const LEN: usize = 8000;
 
     for i in 0..n_chunks {
-        let window = &preemph[istart + i * FRAME_SIZE..][..WINDOW_SIZE];
+        let window = &after_preemph[istart + i * FRAME_SIZE..][..WINDOW_SIZE];
         let coeffs = lpc::Reflector::new(&window);
         println!("{:.3?} {:.3}", coeffs.ks(), coeffs.rms());
         if let Some(writer) = &mut out {
+            let period = if args.voiced { 140 } else { 0 };
             let mut synth = Synth::new(coeffs.ks().len());
             let params = Params {
                 k: coeffs.ks().into(),
-                period: 140,
+                period,
+                rms: 1.0,
             };
             for j in 0..LEN {
                 let y = synth.get_sample(&params);
@@ -156,7 +161,11 @@ fn main_synth(args: SynthCmd) {
         .map(|arg| arg.trim().parse().unwrap())
         .collect();
     let mut synth = Synth::new(k.len());
-    let params = Params { k, period: 140 };
+    let params = Params {
+        k,
+        period: 140,
+        rms: 1.0,
+    };
     for _ in 0..16_000 {
         let y = synth.get_sample(&params);
         let yi = (y * 16384.).clamp(-32768.0, 32767.) as i16;
@@ -177,7 +186,9 @@ fn main_phoneme(args: PhonemeCmd) {
     let mut synth = Synth::new(phoneme.ks.len());
     let k = phoneme.ks.to_vec();
     println!("{k:?} {}", phoneme.ks.len());
-    let params = Params { k, period: 140 };
+    let period = if phoneme.voiced { 140 } else { 0 };
+    let rms = phoneme.rms * 1e-3;
+    let params = Params { k, period, rms };
     for j in 0..16_000 {
         let y = synth.get_sample(&params);
         let env = simple_env(j, 16_000);

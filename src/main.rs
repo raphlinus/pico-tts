@@ -1,3 +1,5 @@
+use std::io::{self, BufRead};
+
 use clap::Parser;
 
 use crate::{
@@ -9,6 +11,7 @@ mod lpc;
 mod phonemes;
 mod sequence;
 mod synth;
+mod text_to_phoneme;
 
 #[derive(Parser, Debug)]
 enum Cmd {
@@ -17,6 +20,7 @@ enum Cmd {
     Synth(SynthCmd),
     Phoneme(PhonemeCmd),
     Seq(SeqCmd),
+    Text(TextCmd),
 }
 
 #[derive(Parser, Debug)]
@@ -60,6 +64,13 @@ struct SeqCmd {
     //#[arg(short, long)]
     out_file: String,
     phonemes: String,
+}
+
+#[derive(Parser, Debug)]
+struct TextCmd {
+    #[arg(short, long)]
+    file: bool,
+    text: String,
 }
 
 fn read_wav(filename: String) -> (hound::WavSpec, Vec<i16>) {
@@ -224,14 +235,29 @@ fn main_seq(args: SeqCmd) {
     writer.finalize().unwrap();
 }
 
+fn main_text(args: TextCmd) {
+    let ttp = crate::text_to_phoneme::TextToPhoneme::new();
+    if args.file {
+        let file = std::fs::File::open(args.text).unwrap();
+        let reader = io::BufReader::new(file);
+        for word in reader.lines() {
+            let w = word.unwrap();
+            println!("{w}: {}", ttp.translate(&format!(" {w} ")));
+        }
+    } else {
+        println!("{}", ttp.translate(&format!(" {} ", args.text)));
+    }
+}
+
 fn main() {
     let cmd = Cmd::parse();
-    println!("{cmd:?}");
+    //println!("{cmd:?}");
     match cmd {
         Cmd::Clip(args) => main_clip(args),
         Cmd::Lpc(lpc) => main_lpc(lpc),
         Cmd::Synth(synth) => main_synth(synth),
         Cmd::Phoneme(phoneme) => main_phoneme(phoneme),
         Cmd::Seq(seq) => main_seq(seq),
+        Cmd::Text(text) => main_text(text),
     }
 }

@@ -119,6 +119,13 @@ impl<T: AsRef<[&'static Phoneme]>> Sequence<T> {
                 sustain_len: 1,
                 release_len: 320,
             },
+            Kind::Affricate => Env {
+                attack_len: 320,
+                decay_len: 320,
+                sustain_level: 0.3,
+                sustain_len: 1,
+                release_len: 480,
+            },
             _ => Env {
                 attack_len: 500,
                 decay_len: 100,

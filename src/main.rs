@@ -19,7 +19,7 @@ enum Cmd {
     Lpc(Lpc),
     Synth(SynthCmd),
     Phoneme(PhonemeCmd),
-    Seq(SeqCmd),
+    Say(SayCmd),
     Text(TextCmd),
 }
 
@@ -60,10 +60,10 @@ struct PhonemeCmd {
 }
 
 #[derive(Parser, Debug)]
-struct SeqCmd {
+struct SayCmd {
     //#[arg(short, long)]
     out_file: String,
-    phonemes: String,
+    text: String,
 }
 
 #[derive(Parser, Debug)]
@@ -218,7 +218,7 @@ fn main_phoneme(args: PhonemeCmd) {
     writer.finalize().unwrap();
 }
 
-fn main_seq(args: SeqCmd) {
+fn main_say(args: SayCmd) {
     let spec = hound::WavSpec {
         channels: 1,
         sample_rate: 16_000,
@@ -226,8 +226,15 @@ fn main_seq(args: SeqCmd) {
         sample_format: hound::SampleFormat::Int,
     };
     let mut writer = hound::WavWriter::create(args.out_file, spec).unwrap();
-    let phonemes = crate::phonemes::parse(&args.phonemes);
-    let mut seq = crate::sequence::Sequence::new(phonemes);
+    let phoneme_seq;
+    if args.text.starts_with('/') {
+        phoneme_seq = crate::phonemes::parse(&args.text[1..]);
+    } else {
+        let ttp = crate::text_to_phoneme::TextToPhoneme::new();
+        let phonemes = ttp.translate(&format!(" {} ", args.text));
+        phoneme_seq = crate::phonemes::parse(&phonemes);
+    }
+    let mut seq = crate::sequence::Sequence::new(phoneme_seq);
     while let Some(y) = seq.get() {
         let yi = (y * 16384.).clamp(-32768.0, 32767.) as i16;
         writer.write_sample(yi).unwrap();
@@ -257,7 +264,7 @@ fn main() {
         Cmd::Lpc(lpc) => main_lpc(lpc),
         Cmd::Synth(synth) => main_synth(synth),
         Cmd::Phoneme(phoneme) => main_phoneme(phoneme),
-        Cmd::Seq(seq) => main_seq(seq),
+        Cmd::Say(seq) => main_say(seq),
         Cmd::Text(text) => main_text(text),
     }
 }

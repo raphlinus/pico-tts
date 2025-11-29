@@ -1,9 +1,12 @@
 //! A simple, low-resource text to phoneme implementation
 
+use std::collections::HashMap;
+
 use bitflags::bitflags;
 
 pub struct TextToPhoneme {
     alpha_rules: [Vec<Rule>; 26],
+    dict: HashMap<&'static str, &'static str>,
 }
 
 #[derive(Debug)]
@@ -76,7 +79,6 @@ const ALPHA_FLAGS: [Flags; 26] = [
 // a consequence of greedy matching.
 const RAW_RULES: &[&str] = &[
     "[a] =ə",
-    " [are] =ɑɹ", // note: should probably go into dict instead
     " [ar]o=əɹ",
     "[ar]#=ɛɹ",
     " ^[as]#=ɛɪs",
@@ -132,7 +134,6 @@ const RAW_RULES: &[&str] = &[
     ".e[d] =d",
     "#:^e[d] =t",
     " [de]^#=dɪ",
-    " [do] =du",
     " [does]=dʌz",
     " [doing]=duɪŋ",
     " [dow]=daw",
@@ -194,7 +195,6 @@ const RAW_RULES: &[&str] = &[
     "[h]#=h",
     "[h]",
     " [in]=ɪn",
-    " [i] =aɪ",
     "[in]d=aɪn",
     "[ier]=iɹ",
     "#:r[ied] =id",
@@ -238,7 +238,6 @@ const RAW_RULES: &[&str] = &[
     "[ngl]%=ŋgəl",
     "[ng]=ŋ",
     "[nk]=ŋk",
-    " [now] =naw",
     "[n]=n",
     "[of] =əv",
     "[orough]=ɚo",
@@ -327,16 +326,12 @@ const RAW_RULES: &[&str] = &[
     "#[sm]=zm",
     "#[sn] '=zən",
     "[s]=s",
-    " [the] =ðə",
     "[to] =tu",
     "[that] =ðæt",
-    " [this] =ðɪs",
     " [they]=ðeɪ",
     " [there]=ðɛɹ",
     "[ther]=ðɚ",
     "[their]=ðɛɹ",
-    " [than] =ðæn",
-    " [them] =ðɛm",
     "[these] =ðiz",
     " [then]=ðɛn",
     "[through]=θɹu",
@@ -400,6 +395,47 @@ const RAW_RULES: &[&str] = &[
     "[z]=z",
 ];
 
+const DICTIONARY: &[(&str, &str)] = &[
+    ("a", "ə"),
+    ("allow", "əlaw1"),
+    ("answer", "æ1nsɚ"),
+    ("anyone", "ɛ1niwʌ2n"),
+    ("are", "ɑɹ"),
+    ("certain", "sɚ1tən"),
+    ("color", "kʌ1lɚ"),
+    ("cost", "kɔst"), // maybe ɑ
+    ("country", "kʌ1ntɹi"),
+    ("do", "du"),
+    ("foot", "fʊt"),
+    ("i", "aɪ"),
+    ("laugh", "læf"),
+    ("listen", "lɪ1sɛn"),
+    ("lose", "luz"),
+    ("machine", "mæʃi1n"),
+    ("major", "mɛɪ1dʒɚ"),
+    ("money", "mʌ1ni"),
+    ("national", "næ1ʃənəl"),
+    ("none", "nʌn"),
+    ("now", "naw"),
+    ("often", "ɔ1fɛn"),
+    ("private", "pɹaɪ1vət"),
+    ("pull", "pʊl"),
+    ("senior", "si1njɚ"),
+    ("someone", "sʌ1mwʌn"),
+    ("this", "ðɪs"),
+    ("than", "ðæn"),
+    ("the", "ðə"),
+    ("them", "ðɛm"),
+    ("threat", "θɹɛt"),
+    ("total", "to1təl"),
+    ("tough", "tʌf"),
+    ("town", "tawn"),
+    ("weapon", "wɛ1pən"),
+    ("window", "wɪ1ndo"),
+    ("woman", "wʊ1mən"),
+    ("women", "wɪ1mən"),
+];
+
 impl TextToPhoneme {
     pub fn new() -> Self {
         let mut alpha_rules = [const { Vec::new() }; 26];
@@ -413,6 +449,9 @@ impl TextToPhoneme {
             let output = split3.next().unwrap_or_default();
             let first_ch = body.as_bytes()[0];
             assert!(first_ch.is_ascii_lowercase());
+            if pre == " " && post == " " {
+                println!("{rule}");
+            }
             let rule = Rule {
                 pre,
                 body,
@@ -421,7 +460,11 @@ impl TextToPhoneme {
             };
             alpha_rules[(first_ch - b'a') as usize].push(rule);
         }
-        TextToPhoneme { alpha_rules }
+        let mut dict = HashMap::new();
+        for (word, phonemes) in DICTIONARY {
+            dict.insert(*word, *phonemes);
+        }
+        TextToPhoneme { alpha_rules, dict }
     }
 
     /// Translate text to phonemes.
@@ -429,21 +472,29 @@ impl TextToPhoneme {
     /// In this version, input should be normalized - lowercase, space separated.
     pub fn translate(&self, text: &str) -> String {
         let mut result = String::new();
-        // TODO: iterate words etc
-        self.translate_word(text.as_bytes(), 1, &mut result);
+        let mut ix = 1;
+        while ix < text.len() {
+            if let Some(pos) = text[ix + 1..].as_bytes().iter().position(|c| *c == b' ') {
+                if !result.is_empty() {
+                    result.push(' ');
+                }
+                let word_end = ix + 1 + pos;
+                if let Some(phonemes) = self.dict.get(&text[ix..word_end]) {
+                    result.push_str(phonemes);
+                } else {
+                    self.translate_word(text.as_bytes(), ix, &mut result);
+                }
+                ix = word_end + 1;
+            } else {
+                break;
+            }
+        }
         result
     }
 
     fn translate_word(&self, text: &[u8], mut ix: usize, result: &mut String) {
         while ix < text.len() {
             let c = text[ix];
-            if c == b' ' {
-                ix += 1;
-                if ix + 1 < text.len() {
-                    result.push(' ');
-                }
-                continue;
-            }
             if !c.is_ascii_lowercase() {
                 break;
             }
@@ -648,11 +699,6 @@ impl Rule {
 }
 
 impl Flags {
-    fn from_letter(letter: u8) -> Self {
-        assert!(letter.is_ascii_lowercase());
-        ALPHA_FLAGS[(letter - b'a') as usize]
-    }
-
     fn is(&self, letter: u8) -> bool {
         letter.is_ascii_lowercase() && ALPHA_FLAGS[(letter - b'a') as usize].contains(*self)
     }

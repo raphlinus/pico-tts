@@ -8,7 +8,7 @@ To run:
 cargo run out.wav hello
 ```
 
-On macOS, you can play the generated file using `afplay out.wav`. It wouldn't be hard to wire up sound output using [tinyaudio] or cpal, but I haven't done so.
+On macOS, you can play the generated file using `afplay out.wav`. It wouldn't be hard to wire up sound output using [tinyaudio] or [cpal], but I haven't done so.
 
 ## Goals and non-goals
 
@@ -36,9 +36,9 @@ Lastly, while the computational cost of LPC is very low at low sample rates, it 
 
 Another struggle was the representation of phonemes. I wanted to use IPA including Unicode symbols, partly because it would provide a straightforward path for speaking IPA encoded utterances, but I ran into two problems.
 
-For one, the spelling of diphthongs is controversial. A good introduction is the video [Why these English phonetic symbols are all WRONG] by Geoff Lindsey. For example, IY in ARPABET is traditionally written /iː/, but Lindsey prefers /ɪj/, and similarly for AW: /aʊ/ and /aw/.
+For one, the spelling of diphthongs is controversial. A good introduction is the video [Why these English phonetic symbols are all WRONG] by Geoff Lindsey. For example, IY in [ARPABET] is traditionally written /iː/, but Lindsey prefers /ɪj/, and similarly for AW: /aʊ/ and /aw/.
 
-I'm also currently not resolving phonemes into allophones, for example T (/t/ in IPA) can be either a flap (/ɾ/) or aspirated (/tʰ/), with many variations. Multiple allophones would be a significant improvement in quality. One potential allophone set is [SP0256 Allophones].
+I'm also currently not resolving phonemes into allophones, for example T (/t/ in IPA) can be either a flap (/ɾ/) or aspirated (/tʰ/), with many variations. Multiple allophones would be a significant improvement in quality. One potential allophone set is [SP0256 Allophones], but this very likely would benefit from rethinking.
 
 The current version has no implementation of stress, and pitch is monotone. This was an intentional decision to keep things simple, but seriously limits speech quality. Getting prosody right is extremely challenging, but a basic implementation of stress would improve things greatly. See also [Software Automatic Mouth] for pointers on how to do very simple speech variation: pitch is determined from an inverse relation with the F1 formant frequency.
 

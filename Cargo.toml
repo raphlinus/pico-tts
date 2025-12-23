@@ -2,6 +2,8 @@
 name = "pico-tts"
 version = "0.1.0"
 edition = "2024"
+authors = ["Raph Levien <raph.levien@gmail.com>"]
+license = "Apache-2.0 OR MIT"
 
 [dependencies]
 bitflags = "2.10.0"

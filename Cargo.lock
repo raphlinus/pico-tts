@@ -135,6 +135,7 @@ dependencies = [
  "bitflags",
  "clap",
  "hound",
+ "rpoly",
 ]
 
 [[package]]
@@ -154,6 +155,12 @@ checksum = "ce25767e7b499d1b604768e7cde645d14cc8584231ea6b295e9c9eb22c02e1d1"
 dependencies = [
  "proc-macro2",
 ]
+
+[[package]]
+name = "rpoly"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43c62cbcdb76d1642bfe2eb0a5fa16734b01a5e25442e72ec00d9748f1d2f70c"
 
 [[package]]
 name = "strsim"

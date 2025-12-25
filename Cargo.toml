@@ -9,3 +9,4 @@ license = "Apache-2.0 OR MIT"
 bitflags = "2.10.0"
 clap = { version = "4.5.51", features = ["derive"] }
 hound = "3.5.1"
+rpoly = { version = "0.2.9", optional = true }

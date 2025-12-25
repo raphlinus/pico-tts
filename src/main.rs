@@ -14,6 +14,9 @@ mod sequence;
 mod synth;
 mod text_to_phoneme;
 
+#[cfg(feature = "rpoly")]
+mod lpc_to_formants;
+
 #[derive(Parser, Debug)]
 enum Cmd {
     Clip(Clip),
@@ -136,6 +139,10 @@ fn main_lpc(args: Lpc) {
         let window = &after_preemph[istart + i * FRAME_SIZE..][..WINDOW_SIZE];
         let coeffs = lpc::Reflector::new(&window);
         println!("{:.3?} {:.3}", coeffs.ks(), coeffs.rms());
+        #[cfg(feature = "rpoly")]
+        {
+            lpc_to_formants::lpc_to_formants(coeffs.ks());
+        }
         if let Some(writer) = &mut out {
             let period = if args.voiced { 140 } else { 0 };
             let mut synth = Synth::new(coeffs.ks().len());

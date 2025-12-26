@@ -1,4 +1,7 @@
 //! An implementation of the Klatt synthesizer
+//!
+//! Generally follows [Klatt 80] with some tweaks.
+//! [Klatt 80]: https://www.fon.hum.uva.nl/david/ma_ssp/doc/Klatt-1980-JAS000971.pdf
 
 const N_FORMANTS: usize = 5;
 
@@ -11,6 +14,94 @@ pub struct Klatt {
     impuls: f32,
     pulse_period: usize,
     pulse_phase: usize,
+}
+
+/// Parameters for Klatt synthesis.
+///
+/// These closely follow Table I in Klatt 80.
+///
+/// Potentially this could be cleaned up. Some parameters (like sampling rate)
+/// could be moved out, and the order also is irregular.
+#[derive(Clone)]
+pub struct KlattParams {
+    /// Amplitude of voicing (dB)
+    pub av: f32,
+    /// Amplitude of frication (dB)
+    pub af: f32,
+    /// Amplitude of aspiration (dB)
+    pub ah: f32,
+    /// Amplitude of sinusoidal voicing (dB)
+    pub avs: f32,
+    /// Fundamental frequency of voicing (Hz)
+    pub f0: f32,
+    /// First formant frequency (Hz)
+    pub f1: f32,
+    /// Second formant frequency (Hz)
+    pub f2: f32,
+    /// Third formant frequency (Hz)
+    pub f3: f32,
+    /// Fourth formant frequency (Hz)
+    pub f4: f32,
+    /// Nasal zero frequency (Hz)
+    pub fnz: f32,
+    /// Nasal formant amplitude (dB)
+    pub an: f32,
+    /// First formant amplitude (dB)
+    pub a1: f32,
+    /// Second formant amplitude (dB)
+    pub a2: f32,
+    /// Third formant amplitude (dB)
+    pub a3: f32,
+    /// Fourth formant amplitude (dB)
+    pub a4: f32,
+    /// Fifth formant amplitude (dB)
+    pub a5: f32,
+    /// Sixth formant amplitude (dB)
+    pub a6: f32,
+    /// Bypass path amplitude (dB)
+    pub ab: f32,
+    /// First formant bandwidth (Hz)
+    pub b1: f32,
+    /// Second formant bandwidth (Hz)
+    pub b2: f32,
+    /// Third formant bandwidth (Hz)
+    pub b3: f32,
+    /// Cascade/parallel switch (true is parallel)
+    pub sw: bool,
+    /// Glottal resonator 1 frequency (Hz)
+    pub fgp: f32,
+    /// Glottal resonator 1 bandwidth (Hz)
+    pub bgp: f32,
+    /// Glottal zero frequency (Hz)
+    pub fgz: f32,
+    /// Glottal zero bandwidth (Hz)
+    pub bgz: f32,
+    /// Fourth formant bandwidth (Hz)
+    pub b4: f32,
+    /// Fifth formant frequency (Hz)
+    pub f5: f32,
+    /// Fifth formant bandwidth (Hz)
+    pub b5: f32,
+    /// Sixth formant frequency (Hz)
+    pub f6: f32,
+    /// Sixth formant bandwidth (Hz)
+    pub b6: f32,
+    /// Nasal pole frequency (Hz)
+    pub fnp: f32,
+    /// Nasal pole bandwidth (Hz)
+    pub bnp: f32,
+    /// Nasal zero bandwidth (Hz)
+    pub bnz: f32,
+    /// Glottal resonator 1 bandwidth (Hz)
+    pub bgs: f32,
+    /// Sampling rate (Hz)
+    pub sr: f32,
+    /// Number of waveform samples per chunk
+    pub nws: usize,
+    /// Overall gain control (dB)
+    pub g0: f32,
+    /// Number of cascaded formants
+    pub nfc: usize,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -36,11 +127,11 @@ impl Resonator {
         y
     }
 
-    /// Bandwidth and frequency in radians per sample
-    fn set(&mut self, f: f32, bw: f32) {
-        let r = (-0.5 * bw).exp();
+    /// Bandwidth and frequency
+    fn set(&mut self, f: f32, bw: f32, radians_per_sample: f32) {
+        let r = (-0.5 * bw * radians_per_sample).exp();
         self.c = -r * r;
-        self.b = 2. * r * f.cos();
+        self.b = 2. * r * (f * radians_per_sample).cos();
         self.a = 1. - self.b - self.c;
     }
 }
@@ -53,10 +144,10 @@ impl AntiResonator {
     }
 
     /// Bandwidth and frequency in radians per sample
-    fn set(&mut self, f: f32, bw: f32) {
-        let r = (-0.5 * bw).exp();
+    fn set(&mut self, f: f32, bw: f32, radians_per_sample: f32) {
+        let r = (-0.5 * bw * radians_per_sample).exp();
         let c = -r * r;
-        let b = 2. * r * f.cos();
+        let b = 2. * r * (f * radians_per_sample).cos();
         let a = 1. - self.b - self.c;
         self.a = 1. / a;
         self.b = -self.a * b;
@@ -89,21 +180,77 @@ impl Klatt {
         y
     }
 
-    pub fn set(&mut self, params: &[f32]) {
-        const SAMPLE_RATE: f32 = 10_000.0;
-        let radians_per_sample = 2.0 * core::f32::consts::PI / SAMPLE_RATE;
-        self.impuls = params[0];
-        self.pulse_period = (SAMPLE_RATE / params[1]).round() as usize;
-        for i in 0..3 {
-            self.cascade[i].set(
-                params[2 * i + 2] * radians_per_sample,
-                params[2 * i + 3] * radians_per_sample,
-            );
+    pub fn set(&mut self, params: &KlattParams) {
+        let radians_per_sample = 2.0 * core::f32::consts::PI / params.sr;
+        self.impuls = db_to_linear(params.av);
+        println!("av lin = {}", self.impuls);
+        self.pulse_period = (params.sr / params.f0).round() as usize;
+        self.cascade[0].set(params.f1, params.b1, radians_per_sample);
+        self.cascade[1].set(params.f2, params.b2, radians_per_sample);
+        self.cascade[2].set(params.f3, params.b3, radians_per_sample);
+        self.cascade[3].set(params.f4, params.b4, radians_per_sample);
+        self.cascade[4].set(params.f5, params.b5, radians_per_sample);
+        self.rgp.set(params.fgp, params.bgp, radians_per_sample);
+        self.rgz.set(params.fgz, params.bgz, radians_per_sample);
+    }
+}
+
+impl Default for KlattParams {
+    // Default values taken from "Typ" column of Table I in Klatt 80.
+    fn default() -> Self {
+        Self {
+            av: 0.0,
+            af: 0.0,
+            ah: 0.0,
+            avs: 0.0,
+            f0: 0.0,
+            f1: 450.0,
+            f2: 1450.0,
+            f3: 2450.0,
+            f4: 3300.0,
+            fnz: 250.0,
+            an: 0.0,
+            a1: 0.0,
+            a2: 0.0,
+            a3: 0.0,
+            a4: 0.0,
+            a5: 0.0,
+            a6: 0.0,
+            ab: 0.0,
+            b1: 50.0,
+            b2: 70.0,
+            b3: 110.0,
+            sw: false,
+            fgp: 0.0,
+            bgp: 100.0,
+            fgz: 1500.0,
+            bgz: 6000.0,
+            b4: 250.0,
+            f5: 3750.0,
+            b5: 200.0,
+            f6: 4900.0,
+            b6: 1000.0,
+            fnp: 250.0,
+            bnp: 100.0,
+            bnz: 100.0,
+            bgs: 200.0,
+            sr: 10_000.0,
+            nws: 50,
+            g0: 47.0,
+            nfc: 5,
         }
-        self.cascade[3].set(2500. * radians_per_sample, 250. * radians_per_sample);
-        self.cascade[4].set(3750. * radians_per_sample, 200. * radians_per_sample);
-        self.rgp.set(0.0, 100.0 * radians_per_sample);
-        self.rgz
-            .set(1500. * radians_per_sample, 6000.0 * radians_per_sample);
+    }
+}
+
+/// Convert decibels to linear scale
+///
+/// Scaled so that 57 dB is unity gain (following klattSyn), and also special cases zero.
+///
+/// Might replace with a lookup table.
+fn db_to_linear(db: f32) -> f32 {
+    if db == 0.0 {
+        0.0
+    } else {
+        ((db - 57.) * (core::f32::consts::LN_10 / 20.0)).exp()
     }
 }

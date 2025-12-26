@@ -3,6 +3,7 @@ use std::io::{self, BufRead};
 use clap::Parser;
 
 use crate::{
+    klatt::KlattParams,
     phonemes::get_phoneme,
     synth::{Params, Synth},
 };
@@ -285,7 +286,16 @@ fn main_klatt(args: KlattCmd) {
         .map(|arg| arg.trim().parse().unwrap())
         .collect();
     let mut klatt = crate::klatt::Klatt::default();
-    klatt.set(&params);
+    let mut klatt_params = KlattParams::default();
+    klatt_params.av = params[0];
+    klatt_params.f0 = params[1];
+    klatt_params.f1 = params[2];
+    klatt_params.f2 = params[3];
+    klatt_params.f3 = params[4];
+    klatt_params.b1 = params[5];
+    klatt_params.b2 = params[6];
+    klatt_params.b3 = params[7];
+    klatt.set(&klatt_params);
     for _ in 0..10_000 {
         let y = klatt.process();
         let yi = (y * 16384.).clamp(-32768.0, 32767.) as i16;

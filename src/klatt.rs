@@ -10,10 +10,21 @@ pub struct Klatt {
     rgp: Resonator,
     rgz: AntiResonator,
     cascade: [Resonator; N_FORMANTS],
+    // r2 through r6
+    par: [Resonator; 5],
+    apar: [f32; 5],
     /// Amplitude of impulse
     impuls: f32,
     pulse_period: usize,
     pulse_phase: usize,
+    noise: Noise,
+    aaspir: f32,
+    afric: f32,
+    abpar: f32,
+}
+
+pub struct Noise {
+    x: u32,
 }
 
 /// Parameters for Klatt synthesis.
@@ -22,6 +33,7 @@ pub struct Klatt {
 ///
 /// Potentially this could be cleaned up. Some parameters (like sampling rate)
 /// could be moved out, and the order also is irregular.
+#[expect(unused, reason = "not all parameters are wired up yet")]
 #[derive(Clone)]
 pub struct KlattParams {
     /// Amplitude of voicing (dB)
@@ -159,6 +171,9 @@ impl Klatt {
     pub fn process(&mut self) -> f32 {
         // Impulse train combined with first derivative
         let mut input = 0.0;
+        if self.pulse_phase >= self.pulse_period {
+            self.pulse_phase = 0;
+        }
         if self.pulse_phase < 2 {
             if self.pulse_phase == 0 {
                 input = self.impuls;
@@ -166,32 +181,61 @@ impl Klatt {
                 input = -self.impuls;
             }
         }
-        self.pulse_phase += 1;
-        if self.pulse_phase >= self.pulse_period {
-            self.pulse_phase = 0;
-        }
         let ygp = self.rgp.process(input);
         let ygz = self.rgz.process(ygp);
-        let mut y = ygz;
+        let mut noise = self.noise.next_pseudogauss();
+        if self.pulse_phase * 2 > self.pulse_period {
+            noise *= 0.5;
+        }
+        self.pulse_phase += 1;
+        // TODO: linear smoothing of aspiration amplitude
+        let uasp = self.aaspir * noise;
+        let ufric = self.afric * noise;
+        let uglot = ygz + uasp;
+        let mut y = uglot;
         for res in self.cascade.iter_mut().rev() {
             y = res.process(y);
         }
         // TODO: nasal
-        y
+        let ulipsv = y;
+        // parallel resonators; for now we're processing noise only
+        let y2p = self.par[0].process(self.apar[0] * ufric);
+        let y3p = self.par[1].process(self.apar[1] * ufric);
+        let y4p = self.par[2].process(self.apar[2] * ufric);
+        let y5p = self.par[3].process(self.apar[3] * ufric);
+        let y6p = self.par[4].process(self.apar[4] * ufric);
+        let ulipsf = -y2p + y3p - y4p + y5p - y6p - self.abpar * ufric;
+        // scaling is arbitrary, probably want to fine-tune
+        (ulipsv + ulipsf) * 0.1
     }
 
     pub fn set(&mut self, params: &KlattParams) {
         let radians_per_sample = 2.0 * core::f32::consts::PI / params.sr;
-        self.impuls = db_to_linear(params.av);
-        println!("av lin = {}", self.impuls);
+        // amplitude scale factors are from NDBSCA in Klatt 80
+        self.impuls = db_to_linear(params.av, 72.0) * params.f0;
         self.pulse_period = (params.sr / params.f0).round() as usize;
         self.cascade[0].set(params.f1, params.b1, radians_per_sample);
         self.cascade[1].set(params.f2, params.b2, radians_per_sample);
         self.cascade[2].set(params.f3, params.b3, radians_per_sample);
         self.cascade[3].set(params.f4, params.b4, radians_per_sample);
         self.cascade[4].set(params.f5, params.b5, radians_per_sample);
+        self.par[0].set(params.f2, params.b2, radians_per_sample);
+        self.par[1].set(params.f3, params.b3, radians_per_sample);
+        self.par[2].set(params.f4, params.b4, radians_per_sample);
+        self.par[3].set(params.f5, params.b5, radians_per_sample);
+        self.par[4].set(params.f6, params.b6, radians_per_sample);
         self.rgp.set(params.fgp, params.bgp, radians_per_sample);
+        // Source comment says "set gain to constant in mid-frequency region for rgp"
+        // self.rgp.a = 0.007;
         self.rgz.set(params.fgz, params.bgz, radians_per_sample);
+        self.aaspir = db_to_linear(params.ah, 102.0);
+        self.afric = db_to_linear(params.af, 72.0);
+        self.apar[0] = db_to_linear(params.a2, 65.0);
+        self.apar[1] = db_to_linear(params.a3, 73.0);
+        self.apar[2] = db_to_linear(params.a4, 78.0);
+        self.apar[3] = db_to_linear(params.a5, 79.0);
+        self.apar[4] = db_to_linear(params.a6, 80.0);
+        self.abpar = db_to_linear(params.ab, 84.0);
     }
 }
 
@@ -244,13 +288,38 @@ impl Default for KlattParams {
 
 /// Convert decibels to linear scale
 ///
-/// Scaled so that 57 dB is unity gain (following klattSyn), and also special cases zero.
-///
 /// Might replace with a lookup table.
-fn db_to_linear(db: f32) -> f32 {
-    if db == 0.0 {
+fn db_to_linear(db: f32, scale: f32) -> f32 {
+    if db <= 0.0 {
         0.0
     } else {
-        ((db - 57.) * (core::f32::consts::LN_10 / 20.0)).exp()
+        ((db - scale) * (core::f32::consts::LN_10 / 20.0)).exp()
+    }
+}
+
+impl Default for Noise {
+    fn default() -> Self {
+        Self { x: 0x1ebdf0c5 }
+    }
+}
+
+impl Noise {
+    // Classic xorshift algorithm
+    fn next_u32(&mut self) -> u32 {
+        let mut x = self.x;
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        self.x = x;
+        x
+    }
+
+    // This is not fast at all but will exactly match Klatt 80
+    fn next_pseudogauss(&mut self) -> f32 {
+        let mut sum = 0.0;
+        for _ in 0..16 {
+            sum += (self.next_u32() as i32 as f32) * (1.0 / 4_294_967_296.0);
+        }
+        sum
     }
 }

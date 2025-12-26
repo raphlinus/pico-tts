@@ -11,6 +11,7 @@ use crate::{
 mod klatt;
 mod lpc;
 mod phonemes;
+mod phones;
 mod sequence;
 mod synth;
 mod text_to_phoneme;
@@ -280,23 +281,41 @@ fn main_klatt(args: KlattCmd) {
         sample_format: hound::SampleFormat::Int,
     };
     let mut writer = hound::WavWriter::create(args.out_file, spec).unwrap();
-    let params: Vec<f32> = args
-        .params
-        .split(',')
-        .map(|arg| arg.trim().parse().unwrap())
-        .collect();
-    let mut klatt = crate::klatt::Klatt::default();
     let mut klatt_params = KlattParams::default();
-    klatt_params.av = params[0];
-    klatt_params.f0 = params[1];
-    klatt_params.f1 = params[2];
-    klatt_params.f2 = params[3];
-    klatt_params.f3 = params[4];
-    klatt_params.b1 = params[5];
-    klatt_params.b2 = params[6];
-    klatt_params.b3 = params[7];
+    let mut target = None;
+    let mut glide = None;
+    if let Some(phone) = phones::Phone::parse(&args.params) {
+        target = phones::vocalic_target(phone).or_else(|| phones::nonvocalic_target(phone));
+        glide = phones::vocalic_target_glide(phone);
+        if let Some(target) = target {
+            target.update(&mut klatt_params);
+        }
+        klatt_params.f0 = 160.;
+        klatt_params.av += 40.;
+    } else {
+        let params: Vec<f32> = args
+            .params
+            .split(',')
+            .map(|arg| arg.trim().parse().unwrap())
+            .collect();
+        klatt_params.av = params[0];
+        klatt_params.f0 = params[1];
+        klatt_params.f1 = params[2];
+        klatt_params.f2 = params[3];
+        klatt_params.f3 = params[4];
+        klatt_params.b1 = params[5];
+        klatt_params.b2 = params[6];
+        klatt_params.b3 = params[7];
+    }
+    let mut klatt = crate::klatt::Klatt::default();
     klatt.set(&klatt_params);
-    for _ in 0..10_000 {
+    const N: usize = 3_000;
+    for i in 0..N {
+        let t = i as f32 * (1.0 / N as f32);
+        if let Some(glide) = glide {
+            glide.lerp(target.unwrap(), &mut klatt_params, t);
+            klatt.set(&klatt_params);
+        }
         let y = klatt.process();
         let yi = (y * 16384.).clamp(-32768.0, 32767.) as i16;
         writer.write_sample(yi).unwrap();

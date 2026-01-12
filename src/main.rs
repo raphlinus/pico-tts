@@ -12,6 +12,7 @@ mod klatt;
 mod lpc;
 mod phonemes;
 mod phones;
+mod phonet;
 mod sequence;
 mod synth;
 mod text_to_phoneme;
@@ -28,6 +29,7 @@ enum Cmd {
     Say(SayCmd),
     Text(TextCmd),
     Klatt(KlattCmd),
+    Phonet(PhonetCmd),
 }
 
 #[derive(Parser, Debug)]
@@ -82,6 +84,12 @@ struct TextCmd {
 
 #[derive(Parser, Debug)]
 struct KlattCmd {
+    out_file: String,
+    params: String,
+}
+
+#[derive(Parser, Debug)]
+struct PhonetCmd {
     out_file: String,
     params: String,
 }
@@ -323,6 +331,41 @@ fn main_klatt(args: KlattCmd) {
     writer.finalize().unwrap();
 }
 
+fn main_phonet(args: PhonetCmd) {
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 10_000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(args.out_file, spec).unwrap();
+    let mut phonet = phonet::Phonet::default();
+    let mut phones = args.params.split(' ');
+    let mut klatt = crate::klatt::Klatt::default();
+
+    let mut klatt_params = KlattParams::default();
+    loop {
+        if phonet.inp_ready() {
+            if let Some(phone) = phones.next() {
+                if let Some(p) = phones::Phone::parse(phone) {
+                    phonet.push_phone(p);
+                }
+            } else {
+                break;
+            }
+        }
+        phonet.get_frame(&mut klatt_params);
+        klatt.set(&klatt_params);
+        for _ in 0..50 {
+            let y = klatt.process();
+            let yi = (y * 16384.).clamp(-32768.0, 32767.) as i16;
+            writer.write_sample(yi).unwrap();
+        }
+    }
+
+    writer.finalize().unwrap();
+}
+
 fn main() {
     let cmd = Cmd::parse();
     //println!("{cmd:?}");
@@ -334,5 +377,6 @@ fn main() {
         Cmd::Say(seq) => main_say(seq),
         Cmd::Text(text) => main_text(text),
         Cmd::Klatt(klatt) => main_klatt(klatt),
+        Cmd::Phonet(phonet) => main_phonet(phonet),
     }
 }

@@ -1,5 +1,7 @@
 //! Data for phones.
 
+use bitflags::bitflags;
+
 use crate::klatt::KlattParams;
 
 /// Phones
@@ -106,6 +108,50 @@ pub struct ParamTargetGlide {
     f3: u16,
 }
 
+#[derive(Clone, Copy)]
+pub struct PhoneDuration {
+    #[expect(unused, reason = "will be used in phonet rules")]
+    pub min_duration: u16,
+    pub inherent_duration: u16,
+}
+
+bitflags! {
+    #[derive(Clone, Copy)]
+    pub struct Flags: u32 {
+        const AFFRICATE = 1;
+        const ALVEOLAR = 2;
+        const ASPSEG = 4;
+        const DENTAL = 8;
+        const DIPHTHONG = 0x10;
+        const F2BACK = 0x20;
+        const FRICATIVE = 0x40;
+        const FRONT = 0x80;
+        const GLOTTAL = 0x100;
+        const HIGH = 0x200;
+        const LABIAL = 0x400;
+        const LATERAL = 0x800;
+        const LAX = 0x1000;
+        const LIQGLIDE = 0x2000;
+        const LOW = 0x4000;
+        const NASAL = 0x8000;
+        const PALATAL = 0x1_0000;
+        const PALVEL = 0x2_0000;
+        const PLOSIVE = 0x4_0000;
+        const RETRO = 0x8_0000;
+        const RGLIDE = 0x10_0000;
+        const ROUND = 0x20_0000;
+        const SCHWA = 0x40_0000;
+        const SONORANT = 0x80_0000;
+        const STOP = 0x100_0000;
+        const SYLLABIC = 0x200_0000;
+        const VELAR = 0x400_0000;
+        const VOICED = 0x800_0000;
+        const VOWEL = 0x1000_0000;
+        const WGLIDE = 0x2000_0000;
+        const YGLIDE = 0x4000_0000;
+    }
+}
+
 const fn inv_map(phones: &[Phone]) -> [u8; N_PHONE] {
     let mut map = [255; N_PHONE];
     let mut i = 0;
@@ -184,6 +230,21 @@ impl Phone {
             _ => None,
         }
     }
+
+    pub fn flags(self) -> Flags {
+        PHONE_FLAGS[self as u8 as usize]
+    }
+
+    // True if all flags are set
+    pub fn is(self, f: Flags) -> bool {
+        self.flags().contains(f)
+    }
+
+    #[expect(unused, reason = "will be used in phonet rules")]
+    // True if not all flags are set (any are not)
+    pub fn is_not(self, f: Flags) -> bool {
+        !self.flags().contains(f)
+    }
 }
 
 impl ParamTarget {
@@ -256,6 +317,15 @@ impl ParamTargetGlide {
         params.f1 = target.f1 as f32 * (1.0 - t) + self.f1 as f32 * t;
         params.f2 = target.f2 as f32 * (1.0 - t) + self.f2 as f32 * t;
         params.f3 = target.f3 as f32 * (1.0 - t) + self.f3 as f32 * t;
+    }
+}
+
+impl PhoneDuration {
+    const fn new(min: u16, inh: u16) -> Self {
+        Self {
+            min_duration: min,
+            inherent_duration: inh,
+        }
     }
 }
 
@@ -399,6 +469,284 @@ pub fn vocalic_target_glide(phone: Phone) -> Option<&'static ParamTargetGlide> {
     let ix = VOCALIC_TARGET_GLIDE_IX[phone as u8 as usize] as usize;
     if ix < N_PHONE {
         Some(&VOCALIC_TARGET_GLIDE[ix])
+    } else {
+        None
+    }
+}
+
+macro_rules! set_flag {
+    ( $r:ident[$el:ident] = $( $arg:ident),+ ) => {
+        $r[Phone::$el as u8 as usize] = Flags::empty()
+            $( .union(Flags::$arg) )* ;
+    };
+}
+
+const fn mk_flags() -> [Flags; N_PHONE] {
+    let mut r = [Flags::empty(); N_PHONE];
+    set_flag!(r[Aa] = LOW, SONORANT, SYLLABIC, VOICED, VOWEL);
+    set_flag!(
+        r[Ae] = DIPHTHONG,
+        FRONT,
+        LOW,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL
+    );
+    set_flag!(r[Ah] = SONORANT, SYLLABIC, VOICED, VOWEL);
+    set_flag!(
+        r[Ao] = DIPHTHONG,
+        LOW,
+        ROUND,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL
+    );
+    set_flag!(
+        r[Aw] = DIPHTHONG,
+        LOW,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL,
+        WGLIDE
+    );
+    set_flag!(r[Ax] = SCHWA, SONORANT, SYLLABIC, VOICED, VOWEL);
+    set_flag!(
+        r[Axr] = DIPHTHONG,
+        LOW,
+        RGLIDE,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL
+    );
+    set_flag!(
+        r[Ay] = DIPHTHONG,
+        LOW,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL,
+        YGLIDE
+    );
+    set_flag!(r[Bb] = LABIAL, PLOSIVE, STOP, VOICED);
+    set_flag!(r[Ch] = AFFRICATE, PALATAL, PLOSIVE, STOP);
+    set_flag!(r[Dd] = ALVEOLAR, PLOSIVE, STOP, VOICED);
+    set_flag!(r[Dh] = DENTAL, FRICATIVE, STOP, VOICED);
+    set_flag!(r[Dx] = ALVEOLAR, VOICED);
+    set_flag!(r[Eh] = DIPHTHONG, FRONT, SONORANT, SYLLABIC, VOICED, VOWEL);
+    set_flag!(r[El] = LATERAL, LIQGLIDE, SONORANT, SYLLABIC, VOICED);
+    set_flag!(r[Em] = LABIAL, NASAL, SONORANT, STOP, SYLLABIC, VOICED);
+    set_flag!(r[En] = ALVEOLAR, NASAL, SONORANT, STOP, SYLLABIC, VOICED);
+    set_flag!(r[Er] = RETRO, SONORANT, SYLLABIC, VOICED);
+    set_flag!(
+        r[Exr] = DIPHTHONG,
+        FRONT,
+        RGLIDE,
+        SONORANT,
+        SYLLABIC,
+        VOICED
+    );
+    set_flag!(r[Ey] = DIPHTHONG, FRONT, SONORANT, SYLLABIC, VOICED, YGLIDE);
+    set_flag!(r[Ff] = FRICATIVE, LABIAL);
+    set_flag!(r[Gg] = PLOSIVE, STOP, VELAR, VOICED);
+    set_flag!(r[Gp] = PALVEL, PLOSIVE, STOP, VOICED);
+    set_flag!(r[Hh] = ASPSEG, GLOTTAL, SONORANT);
+    set_flag!(r[Hx] = ASPSEG, GLOTTAL, SONORANT, VOICED);
+    set_flag!(
+        r[Ih] = DIPHTHONG,
+        FRONT,
+        HIGH,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL
+    );
+    set_flag!(
+        r[Ix] = FRONT,
+        HIGH,
+        SCHWA,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL
+    );
+    set_flag!(
+        r[Ixr] = DIPHTHONG,
+        FRONT,
+        HIGH,
+        RGLIDE,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL
+    );
+    set_flag!(
+        r[Iy] = DIPHTHONG,
+        F2BACK,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL,
+        YGLIDE
+    );
+    set_flag!(r[Jj] = AFFRICATE, PALATAL, PLOSIVE, STOP, VOICED);
+    set_flag!(r[Kk] = PLOSIVE, STOP, VELAR);
+    set_flag!(r[Kp] = PALVEL, PLOSIVE, STOP);
+    set_flag!(r[Ll] = LATERAL, LIQGLIDE, SONORANT, VOICED);
+    set_flag!(r[Lx] = LATERAL, LIQGLIDE, SONORANT, VOICED);
+    set_flag!(r[Mm] = NASAL, SONORANT, STOP, VOICED);
+    set_flag!(r[Ng] = NASAL, SONORANT, STOP, VELAR, VOICED);
+    set_flag!(r[Nn] = ALVEOLAR, NASAL, SONORANT, STOP, VOICED);
+    set_flag!(r[Ow] = DIPHTHONG, ROUND, SONORANT, SYLLABIC, VOICED, WGLIDE);
+    set_flag!(
+        r[Oxr] = DIPHTHONG,
+        RGLIDE,
+        ROUND,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL
+    );
+    set_flag!(
+        r[Oy] = DIPHTHONG,
+        ROUND,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL,
+        YGLIDE
+    );
+    set_flag!(r[Pp] = LABIAL, PLOSIVE, STOP);
+    set_flag!(r[Qq] = GLOTTAL, STOP, VOICED);
+    set_flag!(r[Rr] = LIQGLIDE, RETRO, SONORANT, VOICED);
+    set_flag!(r[Rx] = LIQGLIDE, RETRO, SONORANT, VOICED);
+    set_flag!(r[Sh] = FRICATIVE, PALATAL);
+    set_flag!(r[Sil] = GLOTTAL);
+    set_flag!(r[Ss] = ALVEOLAR, FRICATIVE);
+    set_flag!(r[Th] = DENTAL, FRICATIVE);
+    set_flag!(r[Tq] = ALVEOLAR, PLOSIVE, STOP, VOICED);
+    set_flag!(r[Tt] = ALVEOLAR, PLOSIVE, STOP);
+    set_flag!(
+        r[Uh] = DIPHTHONG,
+        HIGH,
+        ROUND,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL
+    );
+    set_flag!(r[Uw] = DIPHTHONG, ROUND, SYLLABIC, VOICED, VOWEL, WGLIDE);
+    // Question: why is Uxr not DIPHTHONG?
+    set_flag!(r[Uxr] = HIGH, RGLIDE, SONORANT, SYLLABIC, VOICED, VOWEL);
+    set_flag!(r[Vv] = FRICATIVE, LABIAL, VOICED);
+    set_flag!(
+        r[Wh] = ASPSEG,
+        HIGH,
+        LABIAL,
+        LIQGLIDE,
+        ROUND,
+        SONORANT,
+        VOICED
+    );
+    set_flag!(r[Ww] = HIGH, LABIAL, LIQGLIDE, ROUND, SONORANT, VOICED);
+    set_flag!(
+        r[Yu] = DIPHTHONG,
+        F2BACK,
+        HIGH,
+        ROUND,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL,
+        WGLIDE
+    );
+    set_flag!(r[Yy] = F2BACK, HIGH, LIQGLIDE, PALATAL, SONORANT, VOICED);
+    set_flag!(r[Zh] = FRICATIVE, PALATAL, VOICED);
+    set_flag!(r[Zz] = ALVEOLAR, FRICATIVE, VOICED);
+    r
+}
+
+pub const PHONE_FLAGS: [Flags; N_PHONE] = mk_flags();
+
+// This is table 9-1 from the book.
+phone_map! {
+    const PHONE_DURATION_IX: [u8; N_PHONE] = _;
+    const PHONE_DURATION: &[PhoneDuration] = &[
+        Aa: (100, 240),
+        Ae: (80, 230),
+        Ah: (60, 140),
+        Ao: (100, 240),
+        Aw: (100, 260),
+        Ax: (60, 120),
+        Axr: (120, 260),
+        Ay: (150, 250),
+        Eh: (70, 150),
+        Er: (80, 180),
+        Exr: (130, 270),
+        Ey: (100, 190),
+        Ih: (40, 135),
+        Ix: (60, 110),
+        Ixr: (100, 230),
+        Iy: (55, 155),
+        Ow: (80, 220),
+        Oxr: (130, 240),
+        Oy: (150, 280),
+        Uh: (60, 160),
+        Uw: (70, 210),
+        Uxr: (110, 230),
+        Yu: (150, 230),
+
+        El: (110, 260),
+        Hh: (20, 80),
+        Hx: (25, 70),
+        Ll: (40, 80),
+        Lx: (70, 90),
+        Rr: (30, 80),
+        Rx: (70, 80),
+        Ww: (60, 80),
+        Wh: (60, 70),
+        Yy: (40, 80),
+
+        Em: (110, 170),
+        En: (100, 170),
+        Mm: (60, 70),
+        Nn: (50, 60),
+        Ng: (60, 95),
+
+        Dh: (30, 50),
+        Ff: (80, 100),
+        Ss: (60, 105),
+        Sh: (80, 105),
+        Th: (60, 90),
+        Vv: (40, 60),
+        Zz: (40, 75),
+        Zh: (40, 70),
+
+        Bb: (60, 85),
+        Dd: (50, 75),
+        Dx: (20, 20),
+        Gg: (60, 80),
+        Gp: (40, 80),
+        Kk: (60, 80),
+        Kp: (40, 80),
+        Pp: (50, 90),
+        Tt: (50, 75),
+        Tq: (50, 75),
+
+        Ch: (50, 70),
+        Jj: (50, 70),
+
+        Axp: (70, 70),
+    ];
+}
+
+pub fn phone_duration(phone: Phone) -> Option<PhoneDuration> {
+    let ix = PHONE_DURATION_IX[phone as u8 as usize] as usize;
+    if ix < N_PHONE {
+        Some(PHONE_DURATION[ix])
     } else {
         None
     }

@@ -1,4 +1,7 @@
-use std::io::{self, BufRead};
+use std::{
+    f64::consts::PI,
+    io::{self, BufRead},
+};
 
 use clap::Parser;
 
@@ -10,6 +13,7 @@ use crate::{
 
 mod klatt;
 mod lpc;
+mod lpc_to_lsp;
 mod phonemes;
 mod phones;
 mod phonet;
@@ -153,6 +157,16 @@ fn main_lpc(args: Lpc) {
         {
             lpc_to_formants::lpc_to_formants(coeffs.ks());
         }
+        let lpc = lpc_to_lsp::parcor_to_lpc(coeffs.ks());
+        println!("lpc: {lpc:.3?}");
+        let lsp = lpc_to_lsp::lpc_to_lsp(&lpc, 1024);
+        let lsp_hz = lsp
+            .iter()
+            .map(|x| 16_000. / (2. * PI) * x)
+            .collect::<Vec<_>>();
+        println!("lsp: {lsp_hz:.3?}");
+        let lpc2 = lpc_to_lsp::lsp_to_lpc(&lsp);
+        println!("lpc reconstructed: {lpc2:.3?}");
         if let Some(writer) = &mut out {
             let period = if args.voiced { 140 } else { 0 };
             let mut synth = Synth::new(coeffs.ks().len());

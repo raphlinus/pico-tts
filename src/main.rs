@@ -8,15 +8,18 @@ use clap::Parser;
 use crate::{
     klatt::KlattParams,
     phonemes::get_phoneme,
+    pitch::PitchEstimator,
     synth::{Params, Synth},
 };
 
+mod filter;
 mod klatt;
 mod lpc;
 mod lpc_to_lsp;
 mod phonemes;
 mod phones;
 mod phonet;
+mod pitch;
 mod sequence;
 mod synth;
 mod text_to_phoneme;
@@ -34,6 +37,7 @@ enum Cmd {
     Text(TextCmd),
     Klatt(KlattCmd),
     Phonet(PhonetCmd),
+    Copy(CopyCmd),
 }
 
 #[derive(Parser, Debug)]
@@ -50,7 +54,7 @@ struct Lpc {
     start: f64,
     end: f64,
     #[arg(short, long)]
-    #[clap(default_value = "0.9375")]
+    #[clap(default_value = "0.97")]
     preemph: f64,
     #[arg(short, long)]
     out_file: Option<String>,
@@ -96,6 +100,15 @@ struct KlattCmd {
 struct PhonetCmd {
     out_file: String,
     params: String,
+}
+
+#[derive(Parser, Debug)]
+struct CopyCmd {
+    audio_file: String,
+    out_file: String,
+    #[arg(short, long)]
+    #[clap(default_value = "0.9375")]
+    preemph: f64,
 }
 
 fn read_wav(filename: String) -> (hound::WavSpec, Vec<i16>) {
@@ -380,6 +393,63 @@ fn main_phonet(args: PhonetCmd) {
     writer.finalize().unwrap();
 }
 
+const FRAME_SIZE: usize = 80;
+const WINDOW_SIZE: usize = 600;
+
+fn hamming_window() -> Vec<f64> {
+    (0..WINDOW_SIZE)
+        .map(|i| 0.54 - 0.46 * (2. * PI * i as f64 / (WINDOW_SIZE - 1) as f64).cos())
+        .collect()
+}
+
+fn main_copy(args: CopyCmd) {
+    let (spec, samples) = read_wav(args.audio_file);
+    let samples_f64 = samples.iter().map(|x| *x as f64).collect::<Vec<_>>();
+    let hw = hamming_window();
+    let n_frames = samples.len().div_ceil(FRAME_SIZE) - 8;
+    let filtered = filter::lowpass(&samples_f64);
+    let preemph = preemph(&samples_f64, args.preemph);
+    let mut writer = hound::WavWriter::create(args.out_file, spec).unwrap();
+    let mut synth = Synth::new(18);
+    for i in 0..n_frames {
+        let base = i * FRAME_SIZE;
+        let filtered_slice = (0..WINDOW_SIZE)
+            .map(|i| filtered.get(base + i).cloned().unwrap_or_default())
+            .collect::<Vec<_>>();
+        let mut period = PitchEstimator::new(&filtered_slice, 32, 320).estimate();
+        const VOICED_THRESH: f64 = 0.2;
+        if lpc::confidence(&filtered_slice, period.round() as usize) < VOICED_THRESH {
+            period = 0.0;
+        }
+        let lpc_input = if period == 0.0 {
+            &samples_f64
+        } else {
+            &preemph
+        };
+        let windowed = (0..WINDOW_SIZE)
+            .map(|i| lpc_input.get(base + i).cloned().unwrap_or_default() * hw[i])
+            .collect::<Vec<_>>();
+        let reflector = lpc::Reflector::new(&windowed);
+        let mut rms = reflector.rms();
+        if period == 0.0 {
+            rms *= 0.25;
+        }
+        let params = Params {
+            k: reflector.ks().into(),
+            period: period.round() as u16,
+            rms,
+        };
+        for _ in 0..FRAME_SIZE {
+            let y = synth.get_sample(&params);
+            let gain = 15.0;
+            let yi = (y * gain).clamp(-32768.0, 32767.) as i16;
+            writer.write_sample(yi).unwrap();
+        }
+        println!("frame {i}: period {period} {rms:.3} {:.3?}", reflector.ks());
+    }
+    writer.finalize().unwrap();
+}
+
 fn main() {
     let cmd = Cmd::parse();
     //println!("{cmd:?}");
@@ -392,5 +462,6 @@ fn main() {
         Cmd::Text(text) => main_text(text),
         Cmd::Klatt(klatt) => main_klatt(klatt),
         Cmd::Phonet(phonet) => main_phonet(phonet),
+        Cmd::Copy(copy) => main_copy(copy),
     }
 }

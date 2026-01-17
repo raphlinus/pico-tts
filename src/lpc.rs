@@ -56,7 +56,7 @@ impl Reflector {
     #[allow(unused)]
     pub fn is_unvoiced(&self) -> bool {
         const UNVOICED_THRESHOLD: f64 = 0.3;
-        self.ks[1] > UNVOICED_THRESHOLD
+        self.ks[0] > UNVOICED_THRESHOLD
     }
 
     pub fn ks(&self) -> &[f64] {

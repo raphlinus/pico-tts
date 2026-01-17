@@ -1,4 +1,4 @@
-const EMPH: f64 = 0.9375;
+const EMPH: f64 = 0.97;
 
 pub struct Synth {
     y: f64,

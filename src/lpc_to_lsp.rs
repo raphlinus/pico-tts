@@ -30,6 +30,44 @@ pub fn parcor_to_lpc(k: &[f64]) -> Vec<f64> {
     a
 }
 
+/// Converts LPC coefficients back to PARCOR (reflection) coefficients.
+/// lpc: [1.0, a1, a2, ..., aM]
+/// Returns: Some(Vec<f64>) containing [k1, k2, ..., kM] if stable, else None.
+pub fn lpc_to_parcor(lpc: &[f64]) -> Option<Vec<f64>> {
+    let m_total = lpc.len() - 1;
+    let mut k = vec![0.0; m_total];
+
+    // Allocate exactly one workspace copy of the LPC coefficients
+    let mut a = lpc.to_vec();
+
+    for m in (1..=m_total).rev() {
+        let km = a[m];
+        k[m - 1] = km;
+
+        let denom = 1.0 - km * km;
+        if denom <= 0.0 {
+            return None; // Unstable filter
+        }
+
+        // Symmetric update: process index j and m-j simultaneously.
+        // We only need to iterate to the midpoint (m/2).
+        for j in 1..=(m / 2) {
+            let aj_old = a[j];
+            let amj_old = a[m - j];
+
+            // Update j
+            a[j] = (aj_old - km * amj_old) / denom;
+
+            // Update m-j only if it's a distinct index
+            if j != m - j {
+                a[m - j] = (amj_old - km * aj_old) / denom;
+            }
+        }
+    }
+
+    Some(k)
+}
+
 /// Converts LPC coefficients to Line Spectral Pairs (LSPs) in radians [0, PI].
 ///
 /// a: LPC coefficients [1.0, a1, ..., aM]

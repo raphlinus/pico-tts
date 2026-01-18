@@ -109,6 +109,18 @@ struct CopyCmd {
     #[arg(short, long)]
     #[clap(default_value = "0.9375")]
     preemph: f64,
+    #[arg(short, long)]
+    #[clap(default_value = "1.0")]
+    pitch: f64,
+    #[arg(short, long)]
+    #[clap(default_value = "1.0")]
+    spectrum: f64,
+    #[arg(short, long)]
+    #[clap(default_value = "18")]
+    n_spectra: usize,
+    #[arg(short, long)]
+    #[clap(default_value = "1.0")]
+    speed: f64,
 }
 
 fn read_wav(filename: String) -> (hound::WavSpec, Vec<i16>) {
@@ -411,13 +423,14 @@ fn main_copy(args: CopyCmd) {
     let preemph = preemph(&samples_f64, args.preemph);
     let mut writer = hound::WavWriter::create(args.out_file, spec).unwrap();
     let mut synth = Synth::new(18);
+    let out_frame_size = (FRAME_SIZE as f64 / args.speed).round() as usize;
     for i in 0..n_frames {
         let base = i * FRAME_SIZE;
         let filtered_slice = (0..WINDOW_SIZE)
             .map(|i| filtered.get(base + i).cloned().unwrap_or_default())
             .collect::<Vec<_>>();
         let mut period = PitchEstimator::new(&filtered_slice, 32, 320).estimate();
-        const VOICED_THRESH: f64 = 0.2;
+        const VOICED_THRESH: f64 = 0.3;
         if lpc::confidence(&filtered_slice, period.round() as usize) < VOICED_THRESH {
             period = 0.0;
         }
@@ -430,18 +443,37 @@ fn main_copy(args: CopyCmd) {
             .map(|i| lpc_input.get(base + i).cloned().unwrap_or_default() * hw[i])
             .collect::<Vec<_>>();
         let reflector = lpc::Reflector::new(&windowed);
+        let lpc = lpc_to_lsp::parcor_to_lpc(reflector.ks());
+        let mut lsp = lpc_to_lsp::lpc_to_lsp(&lpc, 1024);
+
+        for f in &mut lsp[0..args.n_spectra] {
+            *f = ((0.5 * *f).tan() * args.spectrum).atan() * 2.0
+        }
+        // Enforce filter stability even if only lower spectra are affected
+        if args.spectrum > 1.0 {
+            const FREQ_SEPARATION: f64 = 100. * 2. * PI / 16_000.;
+            for i in args.n_spectra..lsp.len() {
+                lsp[i] = lsp[i].max(lsp[i - 1] + FREQ_SEPARATION)
+            }
+        }
+        let new_lpc = lpc_to_lsp::lsp_to_lpc(&lsp);
+        let new_ks = lpc_to_lsp::lpc_to_parcor(&new_lpc).unwrap();
+        println!("ks: {:.3?}", reflector.ks());
+        println!("    {lsp:.3?}");
+        println!(" -> {new_ks:.3?}");
         let mut rms = reflector.rms();
         if period == 0.0 {
             rms *= 0.25;
         }
+        period /= args.pitch;
         let params = Params {
-            k: reflector.ks().into(),
+            k: new_ks,
             period: period.round() as u16,
             rms,
         };
-        for _ in 0..FRAME_SIZE {
+        for _ in 0..out_frame_size {
             let y = synth.get_sample(&params);
-            let gain = 15.0;
+            let gain = 5.0;
             let yi = (y * gain).clamp(-32768.0, 32767.) as i16;
             writer.write_sample(yi).unwrap();
         }

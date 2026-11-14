@@ -140,10 +140,13 @@ fn convert_word(word: &str) -> Result<Vec<String>, String> {
                 _ if vowel_next(i) && s == 0 && next_phone(i).is_some_and(|c| "iIx".contains(c)) => "RR",
                 _ => "ER",
             },
-            'I' | 'E' | 'a' | 'c' | 'U' if phone_at(i + 1) == Some('R') && !vowel_next(i + 1) => {
+            'I' | 'i' | 'E' | 'a' | 'c' | 'o' | 'U' | 'u'
+                if phone_at(i + 1) == Some('R') && !vowel_next(i + 1) =>
+            {
                 skip = true;
                 match c {
-                    'I' => "IXR",
+                    'I' | 'i' => "IXR",
+                    'o' => "OXR",
                     'E' => "EXR",
                     'a' => "AXR",
                     'c' => "OXR",

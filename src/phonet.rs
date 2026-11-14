@@ -90,6 +90,12 @@ pub enum DipUnits {
     /// ms, taking the printed formula literally. Half-widths then usually
     /// exceed the segment, so the glide spans the whole vowel.
     Ms,
+    /// ms, with Segdur in the formula in 5 ms frames (so /45 is /225 ms).
+    /// This is how the Amiga narrator.device source comments the rule.
+    Frames,
+    /// What the Amiga narrator.device code actually computes:
+    /// Tcdiph * Segdur / 540 ms (the "1 +" term dropped).
+    Narrator,
 }
 
 /// Options controlling rendering, mostly for ablation.
@@ -538,10 +544,11 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
                 let segdur = (end - cumdur[F1]) as f32;
                 let mut tcenter = [tdmid / 100. * segdur; 3];
                 let tcdips = match opts.dip_units {
-                    DipUnits::Tenth => tcdiph / 10.,
-                    DipUnits::Ms => tcdiph,
-                } * 0.5
-                    * (1. + segdur / 45.);
+                    DipUnits::Tenth => tcdiph / 10. * 0.5 * (1. + segdur / 45.),
+                    DipUnits::Ms => tcdiph * 0.5 * (1. + segdur / 45.),
+                    DipUnits::Frames => tcdiph * 0.5 * (1. + segdur / 225.),
+                    DipUnits::Narrator => tcdiph * segdur / 540.,
+                };
                 // Earlier diphthongization after HH (printed as +lax, though
                 // the comment says tense vowels).
                 if prev == Phone::Hh && phone.is(Flags::LAX) {

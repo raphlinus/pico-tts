@@ -421,7 +421,9 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("certain", "sɚ1tən"),
     ("character", "kɛ1ɚəktɚ"),
     ("children", "tʃɪldɹɛn"),
+    ("civil", "sɪvəl"),
     ("clothing", "kloðɪŋ"),
+    ("colonial", "kəlo1nɪəl"),
     ("color", "kʌ1lɚ"),
     ("consider", "kʌnsɪ1dɚ"),
     ("control", "kʌntɹo1l"),
@@ -432,17 +434,20 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("decent", "disənt"),
     ("death", "dɛθ"),
     ("design", "dəzaɪn"),
+    ("different", "dɪ1fɹɛnt"),
     ("do", "du"),
     ("does", "dʌz"),
     ("done", "dʌn"),
     ("driven", "dɹɪvən"),
-    ("elegant", "ɛləgənt"),
+    ("elegant", "ɛ1ləgənt"),
     ("enter", "ɛntɚ"),
+    ("enforce", "ɛnfɔɹs"),
     ("equal", "ikwəl"),
     ("evil", "i1vɪl"),
     ("father", "fɑ1ðɚ"),
     ("field", "fild"),
-    ("fixed", "fɪkst"),
+    ("fix", "fɪks"), // for suffix behavior
+    ("fixes", "fɪksəz"),
     ("food", "fud"),
     ("foot", "fʊt"),
     ("fortunate", "fɔ1ɹtʃənət"),
@@ -452,18 +457,22 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("heard", "hɚd"),
     ("heart", "hɑɹt"),
     ("hey", "hɛɪ"),
+    ("honor", "ʌ1nɚ"),
+    ("hundred", "hʌndɹɛd"),
     ("i", "aɪ"),
     ("ideal", "aɪdi1l"),
     ("laugh", "læf"),
     ("listen", "lɪ1sɛn"),
     ("living", "lɪ1vɪŋ"),
     ("livelihood", "laɪ1vlihʊd"),
+    ("loose", "lus"),
     ("lose", "luz"),
     ("machine", "mæʃi1n"),
     ("major", "mɛɪ1dʒɚ"),
     ("material", "məti1ɹi2əl"),
     ("mix", "mɪks"), // for suffix behavior
     ("money", "mʌ1ni"),
+    ("muscle", "mʌsəl"),
     ("national", "næ1ʃənəl"),
     ("necessary", "nɛ1səsɛ2ɚi"),
     ("none", "nʌn"),
@@ -482,12 +491,14 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("relative", "ɹɛ1lətɪv"),
     ("reply", "ɹɛplaɪ"),
     ("senior", "si1njɚ"),
+    ("slavery", "slɛɪvɚi"),
     ("significant", "sɪgnɪ1fɪkənt"),
     ("someone", "sʌ1mwʌn"),
     ("sometimes", "sʌ1mtaɪ1mz"),
     ("spirit", "spi1ɹɪt"),
     ("supply", "sʌplaɪ1"),
     ("surprise", "sʌpɹaɪ1z"),
+    ("terrible", "tɛ1ɹɪbəl"),
     ("territory", "tɛ1ɹɪtɔɹ2i"),
     ("this", "ðɪs"),
     ("than", "ðæn"),
@@ -1127,6 +1138,16 @@ impl TextToPhoneme {
         if let Some(p) = self.lookup(word) {
             return p;
         }
+        // n't contractions (apostrophe already dropped): isnt, didnt,
+        // couldnt. The n is syllabic, and the stem keeps its voicing.
+        if let Some(stem) = word.strip_suffix("nt")
+            && (stem.ends_with('s') || stem.ends_with('d'))
+            && stem.len() >= 2
+        {
+            let x = self.pronounce(stem);
+            let x = x.strip_suffix('s').map_or(x.clone(), |s| format!("{s}z"));
+            return format!("{x}ənt");
+        }
         let has_vowel = |s: &str| s.bytes().any(|c| b"aeiouy".contains(&c));
         for suf in ["ed", "ing"] {
             if let Some(stem) = word.strip_suffix(suf)
@@ -1241,6 +1262,19 @@ impl TextToPhoneme {
                         segs[j].c = 'R';
                         segs[j].vowel = false;
                     }
+                    // Schwa + n after an alveolar obstruent, before a
+                    // consonant or word end, is syllabic N (button, isn't).
+                    'x' if prev.is_some_and(|p| "tdsz".contains(p.c))
+                        && in_word_next.is_some_and(|n| n.c == 'n')
+                        && !segs.get(j + 2).is_some_and(|n| n.vowel) =>
+                    {
+                        segs[j] = Seg {
+                            c: 'N',
+                            vowel: true,
+                            stress: 0,
+                        };
+                        segs.remove(j + 1);
+                    }
                     // Schwa + l before a consonant or word end is syllabic L.
                     'x' if in_word_next.is_some_and(|n| n.c == 'l')
                         && !segs.get(j + 2).is_some_and(|n| n.vowel) =>
@@ -1256,7 +1290,11 @@ impl TextToPhoneme {
                     // (or syllabic L), also across a word boundary.
                     't' | 'd'
                         if prev.is_some_and(|p| p.vowel || p.c == 'R')
-                            && next.is_some_and(|n| (n.vowel || n.c == 'L') && n.stress == 0) =>
+                            && next.is_some_and(|n| (n.vowel || n.c == 'L') && n.stress == 0)
+                            // Not before syllabic n (didn't, button).
+                            && !(in_word_next.is_some_and(|n| n.c == 'x')
+                                && segs.get(j + 2).is_some_and(|n| n.c == 'n')
+                                && !segs.get(j + 3).is_some_and(|n| n.vowel)) =>
                     {
                         segs[j].c = '&';
                     }

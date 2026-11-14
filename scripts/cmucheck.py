@@ -16,8 +16,9 @@ they occur. Without, checks every CMUdict word that is also in
 Pronunciations are compared as phoneme strings with a weighted edit
 distance. Allophones that our front end produces (flap, syllabic L/N,
 r-coloring) are mapped back to phonemes, and small, intelligible
-deviations cost little: weak unstressed vowels (I/x/E), the cot-caught
-merger (a/c), and t/d around a flap. Stress is compared separately (the
+deviations cost little: weak unstressed vowels (I/x/E), any full vowel
+where CMUdict has schwa, the cot-caught merger (a/c), and t/d around a
+flap. Stress is compared separately (the
 vowel carrying primary stress). A word passes if it matches any of
 CMUdict's variants.
 
@@ -102,6 +103,10 @@ def sub_cost(a, b):
     if a == '&' and b in 'td' or b == '&' and a in 'td':
         return 0.0
     if any(a in s and b in s for s in NEAR):
+        return 0.3
+    # A full vowel where CMU reduces to schwa just sounds carefully
+    # pronounced. (A wrongly stressed vowel shows up in the stress check.)
+    if b == 'x' and a in VOWELS:
         return 0.3
     if a in VOWELS and b in VOWELS:
         return 1.0

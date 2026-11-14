@@ -82,6 +82,9 @@ struct SayCmd {
 struct TextCmd {
     #[arg(short, long)]
     file: bool,
+    /// Print the ASCII phoneme format (word markers, stress, boundaries)
+    #[arg(long)]
+    ascii: bool,
     text: String,
 }
 
@@ -98,6 +101,9 @@ struct PhonetCmd {
     /// The input is ASCII phonemes (DECtalk one-character symbols)
     #[arg(long)]
     ascii: bool,
+    /// The input is English text, converted with the letter-to-sound rules
+    #[arg(long)]
+    text: bool,
     /// Mapping of the av/avc table columns to AV/AVS
     #[arg(long, value_enum, default_value_t)]
     voicing: phonet::Voicing,
@@ -327,6 +333,11 @@ fn main_text(args: TextCmd) {
             let w = word.unwrap();
             println!("{w}: {}", ttp.translate(&format!(" {w} ")));
         }
+    } else if args.ascii {
+        match ttp.to_ascii(&args.text) {
+            Ok(a) => println!("{a}"),
+            Err(e) => eprintln!("error: {e}"),
+        }
     } else {
         println!("{}", ttp.translate(&format!(" {} ", args.text)));
     }
@@ -390,7 +401,18 @@ fn main_phonet(args: PhonetCmd) {
     };
     // The input is either a file of timed segments or a list of phones.
     let mut text = std::fs::read_to_string(&args.params).unwrap_or_else(|_| args.params.clone());
-    if args.ascii {
+    if args.text {
+        let ttp = crate::text_to_phoneme::TextToPhoneme::new();
+        text = match ttp.to_ascii(&text) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        };
+        eprintln!("{text}");
+    }
+    if args.ascii || args.text {
         text = match ascii::ascii_to_phono2(&text) {
             Ok(t) => t,
             Err(e) => {

@@ -707,3 +707,255 @@ impl Flags {
         letter.is_ascii_lowercase() && !ALPHA_FLAGS[(letter - b'a') as usize].contains(*self)
     }
 }
+
+/// Words read as function words (`F:`) in the ASCII output: determiners,
+/// pronouns, prepositions, conjunctions and auxiliaries. They get no
+/// lexical stress.
+const FUNCTION_WORDS: &[&str] = &[
+    "a", "an", "the", "this", "that", "these", "those", "some", "any", "no", "every", "each",
+    "i", "me", "my", "you", "your", "he", "him", "his", "she", "her", "it", "its", "we", "us",
+    "our", "they", "them", "their", "who", "whom", "whose", "which", "what", "of", "in", "on",
+    "at", "to", "for", "from", "by", "with", "as", "into", "onto", "upon", "about", "over",
+    "under", "than", "and", "or", "but", "nor", "so", "if", "while", "when", "because", "is",
+    "am", "are", "was", "were", "be", "been", "being", "do", "does", "did", "has", "have", "had",
+    "will", "would", "shall", "should", "can", "could", "may", "might", "must", "not", "there",
+];
+
+/// An element of a word on its way from IPA to the ASCII alphabet.
+#[derive(Clone, Copy, PartialEq)]
+struct Seg {
+    c: char,
+    vowel: bool,
+    stress: u8,
+}
+
+/// IPA (as produced by the rules above) to one-character DECtalk symbols.
+fn ipa_to_segs(ipa: &str) -> Result<Vec<Seg>, String> {
+    let chars: Vec<char> = ipa.chars().collect();
+    let mut out: Vec<Seg> = vec![];
+    let mut i = 0;
+    while i < chars.len() {
+        let pair = chars.get(i + 1).map(|&n| (chars[i], n));
+        let two = match pair {
+            Some(('ɛ', 'ɪ')) => Some('e'),
+            Some(('a', 'ɪ')) => Some('A'),
+            Some(('a', 'w')) => Some('W'),
+            Some(('ɔ', 'ɪ')) => Some('O'),
+            Some(('t', 'ʃ')) => Some('C'),
+            Some(('d', 'ʒ')) => Some('J'),
+            _ => None,
+        };
+        let (c, len) = if let Some(c) = two {
+            (c, 2)
+        } else {
+            let c = match chars[i] {
+                'ə' => 'x',
+                'ɚ' => 'R',
+                'ɛ' => 'E',
+                'æ' => '@',
+                'ɑ' => 'a',
+                'ɔ' => 'c',
+                'o' => 'o',
+                'u' | 'ʉ' => 'u',
+                'ʊ' => 'U',
+                'ʌ' => '^',
+                'ɪ' => 'I',
+                'i' => 'i',
+                'ɹ' => 'r',
+                'ŋ' => 'G',
+                'ʃ' => 'S',
+                'ʒ' => 'Z',
+                'θ' => 'T',
+                'ð' => 'D',
+                'ʍ' => 'w',
+                'j' => 'y',
+                '1' | '2' => {
+                    if let Some(v) = out.iter_mut().rev().find(|s| s.vowel) {
+                        v.stress = if chars[i] == '1' { 1 } else { 2 };
+                    }
+                    i += 1;
+                    continue;
+                }
+                'ː' => {
+                    i += 1;
+                    continue;
+                }
+                c @ ('b' | 'd' | 'f' | 'g' | 'h' | 'k' | 'l' | 'm' | 'n' | 'p' | 's' | 't'
+                | 'v' | 'w' | 'z') => c,
+                c => return Err(format!("no ASCII phoneme for '{c}' in {ipa}")),
+            };
+            (c, 1)
+        };
+        let vowel = "iIeE@aAW^coOUuxR".contains(c);
+        // Collapse doubled consonants from the spelling rules ("little").
+        if !vowel && out.last().is_some_and(|s| s.c == c) {
+            i += len;
+            continue;
+        }
+        out.push(Seg { c, vowel, stress: 0 });
+        i += len;
+    }
+    Ok(out)
+}
+
+impl TextToPhoneme {
+    /// Translate text to the ASCII phoneme format read by [`crate::ascii`],
+    /// with word markers, stress and phrase boundaries.
+    ///
+    /// Stress comes from the dictionary when it has it; otherwise a content
+    /// word is stressed on its first full (non-schwa) vowel. Function words
+    /// come from a fixed list. Commas, colons and semicolons become `,`;
+    /// question marks `?`; other sentence punctuation `.`.
+    pub fn to_ascii(&self, text: &str) -> Result<String, String> {
+        // Tokenize into words and punctuation.
+        let mut tokens: Vec<String> = vec![];
+        let mut word = String::new();
+        for ch in text.chars().flat_map(char::to_lowercase) {
+            if ch.is_ascii_lowercase() {
+                word.push(ch);
+                continue;
+            }
+            if ch == '\'' || ch == '’' {
+                continue;
+            }
+            if !word.is_empty() {
+                tokens.push(std::mem::take(&mut word));
+            }
+            match ch {
+                ',' | ';' | ':' => tokens.push(",".into()),
+                '.' | '!' => tokens.push(".".into()),
+                '?' => tokens.push("?".into()),
+                _ => {}
+            }
+        }
+        if !word.is_empty() {
+            tokens.push(word);
+        }
+        if !tokens
+            .last()
+            .is_some_and(|t| matches!(t.as_str(), "." | "?"))
+        {
+            tokens.push(".".into());
+        }
+
+        // Words to segments.
+        struct Word {
+            function: bool,
+            segs: Vec<Seg>,
+        }
+        enum Tok {
+            Word(Word),
+            Punct(String),
+        }
+        let mut toks = vec![];
+        for t in tokens {
+            if !t.as_bytes()[0].is_ascii_lowercase() {
+                toks.push(Tok::Punct(t));
+                continue;
+            }
+            let ipa = match self.dict.get(t.as_str()) {
+                Some(p) => p.to_string(),
+                None => self.translate(&format!(" {t} ")),
+            };
+            let mut segs = ipa_to_segs(&ipa).map_err(|e| format!("{e} (\"{t}\")"))?;
+            let function = FUNCTION_WORDS.contains(&t.as_str());
+            if function {
+                segs.iter_mut().for_each(|s| s.stress = 0);
+            } else if !segs.iter().any(|s| s.stress == 1) {
+                let first = segs
+                    .iter()
+                    .position(|s| s.vowel && s.c != 'x')
+                    .or_else(|| segs.iter().position(|s| s.vowel));
+                if let Some(k) = first {
+                    segs[k].stress = 1;
+                }
+            }
+            toks.push(Tok::Word(Word { function, segs }));
+        }
+
+        // Allophones that depend on context.
+        let n = toks.len();
+        for k in 0..n {
+            // The first segment of the next word, if the next token is a word.
+            let next_first = match toks.get(k + 1) {
+                Some(Tok::Word(w)) => w.segs.first().copied(),
+                _ => None,
+            };
+            let Tok::Word(w) = &mut toks[k] else { continue };
+            let segs = &mut w.segs;
+            let mut j = 0;
+            while j < segs.len() {
+                let prev = j.checked_sub(1).map(|p| segs[p]);
+                let next = segs.get(j + 1).copied().or(next_first);
+                let in_word_next = segs.get(j + 1).copied();
+                match segs[j].c {
+                    // Post-vocalic r is r-coloring (merged with the vowel or
+                    // RX by the allophone pass in ascii.rs).
+                    'r' if prev.is_some_and(|p| p.vowel && p.c != 'R')
+                        && !in_word_next.is_some_and(|n| n.vowel) =>
+                    {
+                        segs[j].c = 'R';
+                        segs[j].vowel = false;
+                    }
+                    // Schwa + l before a consonant or word end is syllabic L.
+                    'x' if in_word_next.is_some_and(|n| n.c == 'l')
+                        && !segs.get(j + 2).is_some_and(|n| n.vowel) =>
+                    {
+                        segs[j] = Seg {
+                            c: 'L',
+                            vowel: true,
+                            stress: 0,
+                        };
+                        segs.remove(j + 1);
+                    }
+                    // Flap: t or d between a vowel and an unstressed vowel
+                    // (or syllabic L), also across a word boundary.
+                    't' | 'd'
+                        if prev.is_some_and(|p| p.vowel || p.c == 'R')
+                            && next.is_some_and(|n| (n.vowel || n.c == 'L') && n.stress == 0) =>
+                    {
+                        segs[j].c = '&';
+                    }
+                    _ => {}
+                }
+                j += 1;
+            }
+        }
+
+        // Emit.
+        let mut out = vec![];
+        for t in toks {
+            match t {
+                Tok::Punct(p) => out.push(p),
+                Tok::Word(w) => {
+                    out.push(if w.function { "F:" } else { "C:" }.into());
+                    let mut s = String::new();
+                    for seg in w.segs {
+                        match seg.stress {
+                            1 => s.push('\''),
+                            2 => s.push('"'),
+                            _ => {}
+                        }
+                        s.push(seg.c);
+                    }
+                    out.push(s);
+                }
+            }
+        }
+        Ok(out.join(" "))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_man() {
+        let ttp = TextToPhoneme::new();
+        assert_eq!(
+            ttp.to_ascii("The old man sat in a rocker.").unwrap(),
+            "F: Dx C: 'old C: m'@n C: s'@& F: In F: x C: r'akR ."
+        );
+    }
+}

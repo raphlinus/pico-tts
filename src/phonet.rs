@@ -130,6 +130,10 @@ pub enum Rule {
     /// and 80 ms when stressed), leaving a closure of at least 20 ms or 40%
     /// of the segment. Table C-7's CH 15 and JJ 10 make CH almost silent.
     Affricate,
+    /// Not in the book: a plosive before a pause is released with a burst.
+    /// As printed, C.8.3.1 leaves it unreleased, which makes a final T
+    /// almost inaudible.
+    FinalRelease,
 }
 
 /// How to read the final ELSE rule of C.5.
@@ -564,7 +568,13 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
             trantype[AV] = Trantype::Dissmo;
         }
         // Breathy offset into a pause.
-        if opts.on(Rule::Preasp) && prev != Phone::Sil && phone == Phone::Sil {
+        // (With final-release, a released plosive has no breathy offset;
+        // it would fill the closure with noise.)
+        if opts.on(Rule::Preasp)
+            && prev != Phone::Sil
+            && phone == Phone::Sil
+            && !(opts.on(Rule::FinalRelease) && prev.is(Flags::PLOSIVE))
+        {
             aspdux = 30;
             oldval_avc_inc = 6.;
             aspaml = ASPAMP;
@@ -763,7 +773,8 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
             && phone.is(Flags::PLOSIVE)
             && phone != Phone::Qq
             && (next.is_some_and(|n| !n.is(Flags::STOP) && n != Phone::Sil)
-                || (opts.on(Rule::Affricate) && phone.is(Flags::AFFRICATE)))
+                || (opts.on(Rule::Affricate) && phone.is(Flags::AFFRICATE))
+                || (opts.on(Rule::FinalRelease) && next == Some(Phone::Sil)))
         {
             let mut bd = burdur(phone).unwrap_or(0);
             if opts.on(Rule::Affricate) && phone.is(Flags::AFFRICATE) {

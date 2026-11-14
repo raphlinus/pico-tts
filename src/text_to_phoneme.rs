@@ -406,6 +406,7 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("cost", "kɔst"), // maybe ɑ
     ("country", "kʌ1ntɹi"),
     ("do", "du"),
+    ("fixed", "fɪkst"),
     ("foot", "fʊt"),
     ("i", "aɪ"),
     ("laugh", "læf"),

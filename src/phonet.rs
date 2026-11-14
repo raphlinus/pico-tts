@@ -134,6 +134,11 @@ pub enum Rule {
     /// As printed, C.8.3.1 leaves it unreleased, which makes a final T
     /// almost inaudible.
     FinalRelease,
+    /// Not in the book: amplitude transitions (av through ab) share a short
+    /// segment, each taking at most half of it, so the segment reaches its
+    /// target. Otherwise a 40 ms ZZ between nasals never rises above the
+    /// boundary value (af 30 instead of 60).
+    AmpHalf,
 }
 
 /// How to read the final ELSE rule of C.5.
@@ -1305,12 +1310,19 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
                 tracks.hold(AF, end - bd, amp);
                 continue;
             }
+            let amp_half = opts.on(Rule::AmpHalf) && p <= AB;
             if matches!(trantype[p], Trantype::Setsmo | Trantype::Smodis) {
-                let tb = t1.saturating_sub(tcb[p] as u32).max(mintime[p]);
+                let mut tb = t1.saturating_sub(tcb[p] as u32).max(mintime[p]);
+                if amp_half {
+                    tb = tb.max(prev_start + (t1.saturating_sub(prev_start)) / 2);
+                }
                 tracks.line(p, tb, tracks.at(p, tb), t1, bvalb[p]);
             }
             if matches!(trantype[p], Trantype::Setsmo | Trantype::Dissmo) {
-                let tf = t1 + tcf[p] as u32;
+                let mut tf = t1 + tcf[p] as u32;
+                if amp_half {
+                    tf = tf.min(t1 + end.saturating_sub(t1) / 2);
+                }
                 if tf > end {
                     // Target not reached within the segment.
                     let u = (end - t1) as f32 / (tf - t1) as f32;

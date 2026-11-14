@@ -118,6 +118,7 @@ const RAW_RULES: &[&str] = &[
     " [bus]#=bɪz",
     "[buil]=bɪl",
     "[b]=b",
+    "[crea]t=kɹiɛɪ1", // added
     " [ch]^=k",
     "^e[ch]=k",
     "[ch]=tʃ",
@@ -159,6 +160,7 @@ const RAW_RULES: &[&str] = &[
     "[ew]=ju",
     "[e]o=i",
     "#:&[es] =ɪz",
+    "g[es] =ɪz", // added and perhaps controversial
     "#:[e]s ",
     "#:[ely] =li",
     "[eful]=fʊl",
@@ -244,6 +246,7 @@ const RAW_RULES: &[&str] = &[
     "[orough]=ɚo",
     "w[or]t=ɚ", // added
     "[or]t=ɔɹ", // added
+    "[or]e=ɔɹ", // added
     "#:[or]=ɚ",
     "#:[ors]=ɚz",
     "[or]=ɔɹ",
@@ -291,9 +294,11 @@ const RAW_RULES: &[&str] = &[
     "#:^[om]=ʌm",
     "[o]cus=o", // added
     "[o]=ɑ",
+    "[phys]=fɪz", // added
     "[ph]=f",
     "[peop]=pip",
     "[pow]=paw",
+    "[put]+=pjut", // added
     "[put]=pʊt",
     " [ps]=s", // added
     "[p]=p",
@@ -365,8 +370,11 @@ const RAW_RULES: &[&str] = &[
     "@[u]=u",
     "[u]=ju",
     "[view]=vju",
+    " [viol]=vaɪl", // added
+    " [volt]=volt", // added
     "[v]=v",
     " [were]=wɚ",
+    " [wave]=wɛɪv", // added
     "[wa]s=wɑ",
     "[wa]t=wɑ",
     "[where]=wɛɹ",
@@ -400,40 +408,100 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("a", "ə"),
     ("allow", "əlaw1"),
     ("answer", "æ1nsɚ"),
+    ("antenna", "æntɛ1nə"), // mostly stress
     ("anyone", "ɛ1niwʌ2n"),
+    ("apply", "əplaɪ"),
     ("are", "ɑɹ"),
+    ("argue", "ɑɹgju"),
+    ("attempt", "ətɛmt"),
+    ("aware", "əwɛ2ɚ"),
+    ("bear", "bɛɚ"),
+    ("better", "bɛ1tɚ"), // only here for stress
+    ("british", "bɹɪ1tɪʃ"),
     ("certain", "sɚ1tən"),
+    ("character", "kɛ1ɚəktɚ"),
+    ("children", "tʃɪldɹɛn"),
+    ("clothing", "kloðɪŋ"),
     ("color", "kʌ1lɚ"),
+    ("consider", "kʌnsɪ1dɚ"),
+    ("control", "kʌntɹo1l"),
+    ("contempt", "kʌntɛ1mt"),
     ("cost", "kɔst"), // maybe ɑ
     ("country", "kʌ1ntɹi"),
+    ("cycle", "saɪkəl"),
+    ("decent", "disənt"),
+    ("death", "dɛθ"),
+    ("design", "dəzaɪn"),
     ("do", "du"),
+    ("does", "dʌz"),
+    ("done", "dʌn"),
+    ("driven", "dɹɪvən"),
+    ("elegant", "ɛləgənt"),
+    ("enter", "ɛntɚ"),
+    ("equal", "ikwəl"),
+    ("evil", "i1vɪl"),
+    ("father", "fɑ1ðɚ"),
+    ("field", "fild"),
     ("fixed", "fɪkst"),
+    ("food", "fud"),
     ("foot", "fʊt"),
     ("fortunate", "fɔ1ɹtʃənət"),
+    ("gauge", "gɛɪdʒ"),
+    ("gone", "gɔn"),
+    ("half", "hæf"),
+    ("heard", "hɚd"),
+    ("heart", "hɑɹt"),
+    ("hey", "hɛɪ"),
     ("i", "aɪ"),
+    ("ideal", "aɪdi1l"),
     ("laugh", "læf"),
     ("listen", "lɪ1sɛn"),
+    ("living", "lɪ1vɪŋ"),
+    ("livelihood", "laɪ1vlihʊd"),
     ("lose", "luz"),
     ("machine", "mæʃi1n"),
     ("major", "mɛɪ1dʒɚ"),
     ("material", "məti1ɹi2əl"),
+    ("mix", "mɪks"), // for suffix behavior
     ("money", "mʌ1ni"),
     ("national", "næ1ʃənəl"),
+    ("necessary", "nɛ1səsɛ2ɚi"),
     ("none", "nʌn"),
     ("now", "naw"),
     ("often", "ɔ1fɛn"),
+    ("operate", "ɔ1pɚɛɪ2t"),
+    ("piece", "pis"),
+    ("pizza", "pitsə"),
     ("private", "pɹaɪ1vət"),
+    ("president", "pɹɛ1zɪdɛ2nt"),
+    ("promote", "pɹomo1t"), // stress
     ("pull", "pʊl"),
+    ("push", "pʊʃ"),
+    ("rational", "ɹæ1ʃənəl"),
+    ("reality", "ɹiæ1lɪti"),
+    ("relative", "ɹɛ1lətɪv"),
+    ("reply", "ɹɛplaɪ"),
     ("senior", "si1njɚ"),
+    ("significant", "sɪgnɪ1fɪkənt"),
     ("someone", "sʌ1mwʌn"),
+    ("sometimes", "sʌ1mtaɪ1mz"),
+    ("spirit", "spi1ɹɪt"),
+    ("supply", "sʌplaɪ1"),
+    ("surprise", "sʌpɹaɪ1z"),
+    ("territory", "tɛ1ɹɪtɔɹ2i"),
     ("this", "ðɪs"),
     ("than", "ðæn"),
     ("the", "ðə"),
     ("them", "ðɛm"),
     ("threat", "θɹɛt"),
+    ("today", "tədɛɪ"),
+    ("together", "təgɛ1ðɚ"),
     ("total", "to1təl"),
     ("tough", "tʌf"),
     ("town", "tawn"),
+    ("travel", "tɹævəl"),
+    ("vague", "vɛɪg"),
+    ("vein", "vɛɪn"),
     ("want", "wʌnt"),
     ("weapon", "wɛ1pən"),
     ("window", "wɪ1ndo"),
@@ -635,7 +703,7 @@ impl Rule {
             } else if *post == b'#' {
                 // one or more vowels
                 let mut matched = false;
-                while Flags::VOWEL.is(next) {
+                while Flags::VOWEL.is(next) || next == b'+' {
                     end_ix += 1;
                     if end_ix == text.len() {
                         break;
@@ -663,7 +731,7 @@ impl Rule {
                 end_ix += 1;
             } else if *post == b'+' {
                 // front vowel
-                if !Flags::FRONT_VOWEL.is(next) {
+                if !(next == b'+' || Flags::FRONT_VOWEL.is(next)) {
                     return false;
                 }
                 end_ix += 1;
@@ -692,6 +760,8 @@ impl Rule {
                     } else {
                         end_ix += 1;
                     }
+                } else if next == b'+' {
+                    end_ix += 1;
                 } else {
                     return false;
                 }
@@ -1065,12 +1135,16 @@ impl TextToPhoneme {
                 && !stem.ends_with('e')
             {
                 let b = stem.as_bytes();
+                // We pass a generic front vowel context in place of the suffix, so "change" instead of "chang".
+                let mut context = "+";
                 let stem = if b[b.len() - 1] == b[b.len() - 2] && !stem.ends_with("ll") && !stem.ends_with("ss") {
+                    context = "";
                     &stem[..stem.len() - 1]
                 } else {
                     stem
                 };
-                let x = self.translate(&format!(" {stem} "));
+                eprintln!("translating {stem}{context}");
+                let x = self.translate(&format!(" {stem}{context} "));
                 let ipa = if suf == "ed" { inflection_ipa(&x, suf) } else { "ɪŋ".into() };
                 return format!("{x}{ipa}");
             }

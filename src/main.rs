@@ -134,7 +134,7 @@ struct PhonetCmd {
     no_smooth: bool,
     /// Coefficient updates per frame: formant frequencies and bandwidths
     /// are interpolated linearly from the previous frame in this many steps.
-    #[arg(long, default_value_t = 1)]
+    #[arg(long, default_value_t = 5)]
     interp: usize,
     /// Smooth F0 with Fujisaki's accent filter, with this natural frequency
     /// in 1/s (Fujisaki's beta is typically about 20)

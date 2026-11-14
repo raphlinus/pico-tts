@@ -113,6 +113,14 @@ pub enum Rule {
     /// velar locus of C.9.1 in a vowel-velar transition, and the narrator
     /// has it commented out. Off by default.
     VelarF2,
+    /// Experimental (not in the book): when C.8.1 devoices an obstruent,
+    /// also lower av so it does not exceed avc. With avc as the total
+    /// voicing, the printed rule removes the voicebar but leaves the buzz.
+    /// Off by default.
+    DevoiceAv,
+    /// Experimental (not in the book): frication stops abruptly at the end
+    /// of a fricative, as C.10 does for plosives. Off by default.
+    FricOffset,
 }
 
 /// How to read the final ELSE rule of C.5.
@@ -188,7 +196,13 @@ pub struct Options {
 
 /// Rules that are off unless enabled, where the literal reading of the book
 /// is doubtful.
-const DEFAULT_OFF: &[Rule] = &[Rule::PreaspSil, Rule::AspBurstLiteral, Rule::VelarF2];
+const DEFAULT_OFF: &[Rule] = &[
+    Rule::PreaspSil,
+    Rule::AspBurstLiteral,
+    Rule::VelarF2,
+    Rule::DevoiceAv,
+    Rule::FricOffset,
+];
 
 impl Options {
     fn on(&self, rule: Rule) -> bool {
@@ -679,6 +693,9 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
             // Devoice unless a vowel follows.
             if phone.is(Flags::VOICED) && !next_is(Flags::VOWEL) {
                 target[AVC] = (target[AVC] - 30.).max(0.);
+                if opts.on(Rule::DevoiceAv) {
+                    target[AV] = target[AV].min(target[AVC]);
+                }
             }
             if phone.is(Flags::PALATAL) {
                 target[F4] -= 150.;
@@ -1173,6 +1190,9 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
             if prev.is(Flags::PLOSIVE) {
                 bvalf[AF] = target[AF];
             }
+        }
+        if opts.on(Rule::FricOffset) && prev.is(Flags::FRICATIVE) && !phone.is(Flags::FRICATIVE) {
+            bvalf[AF] = target[AF];
         }
 
         // C.7.1 diphthong rules

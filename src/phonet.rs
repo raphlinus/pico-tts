@@ -127,8 +127,8 @@ pub enum Rule {
     ReleaseHold,
     /// From the narrator (not in the book): affricates always get a burst,
     /// and it is the frication of the affricate, CH 70 ms and JJ 60 ms (120
-    /// and 80 ms when stressed). Table C-7's CH 15 and JJ 10 make CH
-    /// almost silent.
+    /// and 80 ms when stressed), leaving a closure of at least 20 ms or 40%
+    /// of the segment. Table C-7's CH 15 and JJ 10 make CH almost silent.
     Affricate,
 }
 
@@ -774,6 +774,11 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
                     (true, false) => 60,
                     (true, true) => 80,
                 };
+                // Keep a closure of at least 20 ms (or 40% of the segment)
+                // before the frication; without it CH sounds like SH.
+                let segdur = end - cumdur[AF];
+                let closure = (segdur * 2 / 5).max(20);
+                bd = bd.min(segdur.saturating_sub(closure)).max(15);
             }
             if phone == Phone::Tt && next_is(Flags::RETRO) {
                 bd += 10;

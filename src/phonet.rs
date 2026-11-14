@@ -474,17 +474,48 @@ fn table_target(phone: Phone, next: Option<Phone>, opts: &Options) -> Pars {
 /// Parameter tracks on a 1 ms grid.
 struct Tracks {
     v: Vec<Pars>,
+    /// Per parameter, frames from `hold_t` on implicitly have `hold_v`.
+    /// Holding to the end of the utterance lazily keeps drawing linear in
+    /// the length of the text.
+    hold_t: [u32; N_PAR],
+    hold_v: Pars,
 }
 
 impl Tracks {
+    fn new(init: Pars, len: usize) -> Self {
+        Tracks {
+            v: vec![init; len],
+            hold_t: [0; N_PAR],
+            hold_v: init,
+        }
+    }
+
     fn at(&self, p: usize, t: u32) -> f32 {
-        self.v[(t as usize).min(self.v.len() - 1)][p]
+        let t = t.min(self.v.len() as u32 - 1);
+        if t >= self.hold_t[p] {
+            self.hold_v[p]
+        } else {
+            self.v[t as usize][p]
+        }
+    }
+
+    /// Write out the held value up to (not including) `t`.
+    fn materialize(&mut self, p: usize, t: u32) {
+        let t = (t as usize).min(self.v.len());
+        let h = self.hold_t[p] as usize;
+        if h < t {
+            for frame in &mut self.v[h..t] {
+                frame[p] = self.hold_v[p];
+            }
+            self.hold_t[p] = t as u32;
+        }
     }
 
     /// Draw a straight line from (t0, v0) to (t1, v1), inclusive.
     fn line(&mut self, p: usize, t0: u32, v0: f32, t1: u32, v1: f32) {
         let t1 = (t1 as usize).min(self.v.len() - 1);
         let t0 = t0 as usize;
+        self.materialize(p, t1 as u32 + 1);
         for t in t0..=t1 {
             let u = if t1 > t0 {
                 (t - t0) as f32 / (t1 - t0) as f32
@@ -497,8 +528,16 @@ impl Tracks {
 
     /// Hold a value from t0 to the end of the utterance.
     fn hold(&mut self, p: usize, t0: u32, v: f32) {
-        for frame in &mut self.v[t0 as usize..] {
-            frame[p] = v;
+        self.materialize(p, t0);
+        self.hold_t[p] = t0;
+        self.hold_v[p] = v;
+    }
+
+    /// Write out all held values.
+    fn finish(&mut self) {
+        let n = self.v.len() as u32;
+        for p in 0..N_PAR {
+            self.materialize(p, n);
         }
     }
 }
@@ -532,9 +571,7 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
 
     // The utterance starts from silence.
     let sil = table_target(Phone::Sil, None, opts);
-    let mut tracks = Tracks {
-        v: vec![sil; total as usize + 1],
-    };
+    let mut tracks = Tracks::new(sil, total as usize + 1);
 
     let mut start = 0;
     let mut prev_start = 0;
@@ -1359,6 +1396,7 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
                     // Placeholder: add a linear glide toward the second
                     // target over the course of the segment.
                     let delta = diptar - target[p];
+                    tracks.materialize(p, end.min(total) + 1);
                     for t in t1..=end.min(total) {
                         let u = (t - t1) as f32 / (end - t1) as f32;
                         tracks.v[t as usize][p] += delta * u;
@@ -1373,6 +1411,7 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
         start = end;
     }
 
+    tracks.finish();
     let mut frames = vec![];
     let mut out = KlattParams::default();
     let mut t = 0;

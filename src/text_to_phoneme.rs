@@ -401,6 +401,8 @@ const RAW_RULES: &[&str] = &[
     " :[y]#=A",
     " :[y]^+:#=I",
     " :[y]^#=A",
+    "#[y]#=y", // added: player, beyond (consonant between vowels)
+    "aw[y]e=y", // added: lawyer, sawyer
     "[y]=I",
     "[z]=z",
 ];
@@ -1408,14 +1410,20 @@ impl TextToPhoneme {
                 Tok::Word(w) => {
                     out.push(if w.function { "F:" } else { "C:" }.into());
                     let mut s = String::new();
-                    let mut prev_vowel = false;
+                    let mut prev: Option<Seg> = None;
                     for seg in w.segs {
-                        // Syllabic R after a vowel (earlier, happier) gets a
-                        // syllable break so it isn't read as r-coloring.
-                        if seg.c == 'R' && seg.vowel && prev_vowel {
+                        // Syllabic R after a tense vowel or diphthong
+                        // (earlier, lawyer, higher) gets a syllable break so
+                        // it isn't read as r-coloring. After a lax vowel it
+                        // merges (aware: EXR). I is left out: rules give it for unstressed i
+                        // (ameliorate, -ior).
+                        if seg.c == 'R'
+                            && seg.vowel
+                            && prev.is_some_and(|p| p.vowel && !"EacU".contains(p.c))
+                        {
                             s.push('-');
                         }
-                        prev_vowel = seg.vowel;
+                        prev = Some(seg);
                         match seg.stress {
                             1 => s.push('\''),
                             2 => s.push('"'),

@@ -1,6 +1,16 @@
 # pico-tts
 
+Note: this README is quite obsolete by now. It's now become much closer to an implementation of MITalk.
+
+The phoneme representation is now based on [ASCKY] from the DECtalk documentation. Each phoneme gets an ASCII character, using upper and lower case, plus symbols. There's also and implementation of phonet (phonemes to vocal tract model) and an attempt at stress and intonation. It sounds a bit worse than DECtalk but recognizably similar.
+
+
+The text to phoneme engine is still based on [Elovitz et al], but with a boost from a dictionary.
+
+cargo run phonet out.wav --text "Your text here"
+
 An experiment in making a very simple speech synthesizer.
+
 
 To run:
 
@@ -62,3 +72,4 @@ The current architecture should probably not be continued. I'm most inclined to 
 [cpal]: https://docs.rs/cpal/latest/cpal/
 [GI SP0256]: https://en.wikipedia.org/wiki/General_Instrument_SP0256
 [SP0256 Allophones]: https://www.cpcwiki.eu/index.php/SP0256_Allophones
+[ASCKY]: https://dectalk.github.io/dectalk/idh_ref_3_phonemic_symbols_2.htm

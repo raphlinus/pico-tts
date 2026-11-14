@@ -101,6 +101,9 @@ struct PhonetCmd {
     /// Disable a context rule (may be repeated)
     #[arg(long, value_enum)]
     disable: Vec<phonet::Rule>,
+    /// Enable a context rule that is off by default (may be repeated)
+    #[arg(long, value_enum)]
+    enable: Vec<phonet::Rule>,
     /// Reading of the final ELSE rule in C.5
     #[arg(long, value_enum, default_value_t)]
     amp_else: phonet::AmpElse,
@@ -377,6 +380,7 @@ fn main_phonet(args: PhonetCmd) {
         &segs,
         &phonet::Options {
             disabled: args.disable.clone(),
+            enabled: args.enable.clone(),
             amp_else: args.amp_else,
             dip_units: args.dip_units,
             voicing: args.voicing,

@@ -55,6 +55,9 @@ pub enum Rule {
     /// C.5, figure C-1: pre-aspiration before a pause or an unvoiced
     /// consonant after a sonorant.
     Preasp,
+    /// C.5: let the 10 ms sonorant-to-voiceless pre-aspiration rule also
+    /// match SIL, overriding the 30 ms breathy offset. Off by default.
+    PreaspSil,
     /// C.5: frication starts 20 ms early after a sonorant.
     EarlyAf,
     /// C.5: formant transitions out of a stop use Tcobst (table C-6).
@@ -94,6 +97,8 @@ pub enum DipUnits {
 pub struct Options {
     /// Rules switched off.
     pub disabled: Vec<Rule>,
+    /// Rules that are off by default, switched on.
+    pub enabled: Vec<Rule>,
     pub amp_else: AmpElse,
     pub dip_units: DipUnits,
     pub voicing: Voicing,
@@ -105,9 +110,17 @@ pub struct Options {
     pub smooth: bool,
 }
 
+/// Rules that are off unless enabled, where the literal reading of the book
+/// is doubtful.
+const DEFAULT_OFF: &[Rule] = &[Rule::PreaspSil];
+
 impl Options {
     fn on(&self, rule: Rule) -> bool {
-        !self.disabled.contains(&rule)
+        if DEFAULT_OFF.contains(&rule) {
+            self.enabled.contains(&rule)
+        } else {
+            !self.disabled.contains(&rule)
+        }
     }
 }
 
@@ -428,7 +441,14 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
         }
         // Aspiration between voiced sonorant and following unvoiced
         // consonant intrudes on the voicing.
-        if opts.on(Rule::Preasp) && prev.is(Flags::SONORANT) && !phone.is(Flags::VOICED) {
+        // Read literally, this also matches SIL (which is -voiced), cutting
+        // the 30 ms breathy offset above to 10 ms. By default SIL is
+        // excluded, as the comment speaks of a consonant.
+        if opts.on(Rule::Preasp)
+            && prev.is(Flags::SONORANT)
+            && !phone.is(Flags::VOICED)
+            && (phone != Phone::Sil || opts.on(Rule::PreaspSil))
+        {
             aspdux = 10;
         }
         // Start frication early if fricative follows sonorant.

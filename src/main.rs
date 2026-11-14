@@ -143,6 +143,9 @@ struct PhonetCmd {
     /// Relative spread of the per-pulse Gaussian width.
     #[arg(long, default_value_t = 0.5)]
     pulse_spread: f32,
+    /// Pulse-to-pulse correlation of the width (0 = independent).
+    #[arg(long, default_value_t = 0.0)]
+    pulse_rho: f32,
     /// Smooth F0 with Fujisaki's accent filter, with this natural frequency
     /// in 1/s (Fujisaki's beta is typically about 20)
     #[arg(long)]
@@ -475,7 +478,7 @@ fn main_phonet(args: PhonetCmd) {
     };
     let mut writer = hound::WavWriter::create(args.out_file, spec).unwrap();
     let mut klatt = crate::klatt::Klatt::default();
-    klatt.set_pulse_shape(args.pulse_sigma, args.pulse_spread);
+    klatt.set_pulse_shape(args.pulse_sigma, args.pulse_spread, args.pulse_rho);
     let samples_per_frame = (spec.sample_rate * phonet::FRAME_TIME / 1000) as usize;
     let gain = 16384. * 10f32.powf(args.gain / 20.);
     let mut peak = 0f32;

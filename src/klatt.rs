@@ -79,6 +79,8 @@ struct PulseShaper {
     /// Previous shaped output, for the first difference.
     last: f32,
     s_delay: [f32; PULSE_DELAY],
+    rho: f32,
+    drift: f32,
 }
 
 const EQ_HALF: usize = 31;
@@ -126,6 +128,8 @@ impl PulseShaper {
             seed: 0x2545_f491,
             last: 0.0,
             s_delay: [0.0; PULSE_DELAY],
+            rho: 0.0,
+            drift: 0.0,
         }
     }
 
@@ -140,7 +144,12 @@ impl PulseShaper {
     /// excitation, `PULSE_DELAY` samples late.
     fn process(&mut self, impulse: f32) -> f32 {
         if impulse != 0.0 {
-            let sd = self.sigma * (1.0 + self.spread * (2.0 * self.uniform() - 1.0));
+            // Width drifts as an AR(1) process: rho 0 is independent per
+            // pulse; near 1 consecutive pulses are similar. Scaled so the
+            // stationary spread is the same.
+            let u = 2.0 * self.uniform() - 1.0;
+            self.drift = self.rho * self.drift + (1.0 - self.rho * self.rho).sqrt() * u;
+            let sd = self.sigma * (1.0 + self.spread * self.drift.clamp(-1.0, 1.0));
             let n = (4.0 * sd).ceil() as isize;
             let norm: f32 = (-n..=n).map(|j| (-0.5 * (j as f32 / sd).powi(2)).exp()).sum();
             let len = self.ring.len();
@@ -169,8 +178,12 @@ impl PulseShaper {
 impl Klatt {
     /// Use Gaussian glottal pulses of width `sigma` samples (std dev),
     /// randomized by `spread`, instead of impulses. 0 disables.
-    pub fn set_pulse_shape(&mut self, sigma: f32, spread: f32) {
-        self.pulses = (sigma > 0.0).then(|| PulseShaper::new(sigma, spread));
+    pub fn set_pulse_shape(&mut self, sigma: f32, spread: f32, rho: f32) {
+        self.pulses = (sigma > 0.0).then(|| {
+            let mut ps = PulseShaper::new(sigma, spread);
+            ps.rho = rho;
+            ps
+        });
     }
 }
 

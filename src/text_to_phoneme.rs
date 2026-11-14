@@ -947,7 +947,128 @@ fn assign_stress(word: &str, segs: &mut [Seg]) {
     segs[k].stress = 1;
 }
 
+/// Prefixes stripped to find a dictionary stem, with their IPA. They are
+/// left unstressed; the stem carries the primary stress.
+const PREFIXES: &[(&str, &str)] = &[
+    ("un", "ʌn"),
+    ("non", "nɑn"),
+    ("dis", "dɪs"),
+    ("mis", "mɪs"),
+    ("re", "ri"),
+    ("pre", "pri"),
+    ("in", "ɪn"),
+    ("im", "ɪm"),
+    ("over", "ovɚ"),
+    ("under", "ʌndɚ"),
+];
+
+/// Suffixes stripped to find a dictionary stem. `None` means the IPA
+/// depends on the stem's last sound (-s, -es, -ed).
+const SUFFIXES: &[(&str, Option<&str>)] = &[
+    ("ly", Some("li")),
+    ("ness", Some("nəs")),
+    ("ments", Some("mənts")),
+    ("ment", Some("mənt")),
+    ("ful", Some("fəl")),
+    ("less", Some("ləs")),
+    ("ers", Some("ɚz")),
+    ("er", Some("ɚ")),
+    ("est", Some("əst")),
+    ("ings", Some("ɪŋz")),
+    ("ing", Some("ɪŋ")),
+    ("able", Some("əbəl")),
+    ("ed", None),
+    ("es", None),
+    ("s", None),
+];
+
+/// IPA of -s/-es or -ed after a stem whose pronunciation is `stem`.
+fn inflection_ipa(stem: &str, suffix: &str) -> String {
+    let last = stem.chars().rev().find(|c| !c.is_ascii_digit());
+    let voiceless = matches!(last, Some('p' | 't' | 'k' | 'f' | 'θ' | 's' | 'ʃ'));
+    if suffix == "ed" {
+        match last {
+            Some('t' | 'd') => "ɪd",
+            _ if voiceless => "t",
+            _ => "d",
+        }
+    } else {
+        match last {
+            Some('s' | 'z' | 'ʃ' | 'ʒ') => "ɪz",
+            _ if voiceless => "s",
+            _ => "z",
+        }
+    }
+    .to_string()
+}
+
 impl TextToPhoneme {
+    /// Dictionary lookup, stripping affixes to find a stem.
+    fn lookup(&self, word: &str) -> Option<String> {
+        if let Some(p) = self.dict.get(word) {
+            return Some(p.to_string());
+        }
+        for &(pre, ipa) in PREFIXES {
+            if let Some(rest) = word.strip_prefix(pre)
+                && rest.len() >= 3
+                && let Some(x) = self.lookup(rest)
+            {
+                return Some(format!("{ipa}{x}"));
+            }
+        }
+        for &(suf, ipa) in SUFFIXES {
+            let Some(stem) = word.strip_suffix(suf) else { continue };
+            if stem.len() < 2 {
+                continue;
+            }
+            // Spelling changes: dropped e, y to i, doubled consonant.
+            let mut cands = vec![stem.to_string(), format!("{stem}e")];
+            if let Some(s) = stem.strip_suffix('i') {
+                cands.push(format!("{s}y"));
+            }
+            let b = stem.as_bytes();
+            if b.len() >= 2 && b[b.len() - 1] == b[b.len() - 2] {
+                cands.push(stem[..stem.len() - 1].to_string());
+            }
+            for c in cands {
+                if let Some(x) = self.lookup(&c) {
+                    let ipa = ipa.map_or_else(|| inflection_ipa(&x, suf), String::from);
+                    return Some(format!("{x}{ipa}"));
+                }
+            }
+        }
+        None
+    }
+
+    /// Pronunciation of a word in IPA: the dictionary (with affixes
+    /// stripped), else the letter-to-sound rules. For -ed and -ing, the
+    /// rules are applied to the stem, so that rules for a final e (as in
+    /// "fix" + "ed") don't see the suffix.
+    fn pronounce(&self, word: &str) -> String {
+        if let Some(p) = self.lookup(word) {
+            return p;
+        }
+        let has_vowel = |s: &str| s.bytes().any(|c| b"aeiouy".contains(&c));
+        for suf in ["ed", "ing"] {
+            if let Some(stem) = word.strip_suffix(suf)
+                && stem.len() >= 3
+                && has_vowel(stem)
+                && !stem.ends_with('e')
+            {
+                let b = stem.as_bytes();
+                let stem = if b[b.len() - 1] == b[b.len() - 2] && !stem.ends_with("ll") && !stem.ends_with("ss") {
+                    &stem[..stem.len() - 1]
+                } else {
+                    stem
+                };
+                let x = self.translate(&format!(" {stem} "));
+                let ipa = if suf == "ed" { inflection_ipa(&x, suf) } else { "ɪŋ".into() };
+                return format!("{x}{ipa}");
+            }
+        }
+        self.translate(&format!(" {word} "))
+    }
+
     /// Translate text to the ASCII phoneme format read by [`crate::ascii`],
     /// with word markers, stress and phrase boundaries.
     ///
@@ -1002,10 +1123,7 @@ impl TextToPhoneme {
                 toks.push(Tok::Punct(t));
                 continue;
             }
-            let ipa = match self.dict.get(t.as_str()) {
-                Some(p) => p.to_string(),
-                None => self.translate(&format!(" {t} ")),
-            };
+            let ipa = self.pronounce(&t);
             let mut segs = ipa_to_segs(&ipa).map_err(|e| format!("{e} (\"{t}\")"))?;
             let function = FUNCTION_WORDS.contains(&t.as_str());
             if function {
@@ -1100,5 +1218,16 @@ mod tests {
             ttp.to_ascii("The old man sat in a rocker.").unwrap(),
             "F: Dx C: 'old C: m'@n C: s'@& F: In F: x C: r'akR ."
         );
+    }
+
+    #[test]
+    fn affixes() {
+        let mut ttp = TextToPhoneme::new();
+        ttp.dict.insert("fortunate", "fɔ1ɹtʃənət");
+        assert_eq!(
+            ttp.to_ascii("Unfortunately, fortunates.").unwrap(),
+            "C: ^nf'cRCxnxtli , C: f'cRCxnxts ."
+        );
+        assert_eq!(ttp.to_ascii("fixed").unwrap(), "C: f'Ikst .");
     }
 }

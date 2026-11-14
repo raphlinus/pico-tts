@@ -1,57 +1,544 @@
-//! Phoneme to Klatt parameters.
+//! Phonetic segments to Klatt parameters.
+//!
+//! This is modeled on the PHONET module of MITalk (chapter 11 and appendix C
+//! of the book). The input is a sequence of segments, each with a duration
+//! and F0 target, in the form produced by PROSOD (see figure 9-1). The output
+//! is one set of Klatt parameters per 5 ms frame.
 
 use crate::{
     klatt::KlattParams,
-    phones::{Flags, Phone, nonvocalic_target, vocalic_target, vocalic_target_glide},
+    phones::{
+        Flags, Phone, nonvocalic_target, phone_duration, vocalic_target, vocalic_target_glide,
+    },
 };
 
-/// A state machine to convert a sequence of phonemes into frames for
-/// Klatt synthesis.
-#[derive(Default)]
-pub struct Phonet {
-    // Note: this will become a window
-    cur_phone: Option<Phone>,
-    phone_dur: u16,
-    /// Time in ms since phone start
-    time_rel: u16,
+/// Frame time in ms
+pub const FRAME_TIME: u32 = 5;
+
+/// How the av and avc columns of tables C-1 and C-2 map to Klatt voicing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum Voicing {
+    /// av is AV; avc is the total (linear sum) of AV and AVS, so AVS is the
+    /// remainder.
+    #[default]
+    Derived,
+    /// av is AV; avc is AVS (as in mitalk_reborn).
+    Direct,
 }
 
-/// Frame time in ms
-const FRAME_TIME: u16 = 5;
-
-impl Phonet {
-    pub fn inp_ready(&self) -> bool {
-        self.cur_phone.is_none()
-    }
-
-    pub fn push_phone(&mut self, phone: Phone) {
-        if let Some(dur) = crate::phones::phone_duration(phone) {
-            self.cur_phone = Some(phone);
-            self.phone_dur = dur.inherent_duration;
-            self.time_rel = 0;
-        }
-    }
-
-    pub fn get_frame(&mut self, out: &mut KlattParams) {
-        if let Some(phone) = self.cur_phone {
-            let target = vocalic_target(phone).or_else(|| nonvocalic_target(phone));
-            if let Some(target) = target {
-                target.update(out);
-                if let Some(glide) = vocalic_target_glide(phone) {
-                    let t = self.time_rel as f32 / self.phone_dur as f32;
-                    glide.lerp(target, out, t);
-                }
-                if phone.is(Flags::VOICED) {
-                    out.f0 = 160.;
-                    out.av += 40.;
+impl Voicing {
+    /// Returns (AV, AVS) in dB.
+    fn map(self, av: f32, avc: f32) -> (f32, f32) {
+        match self {
+            Voicing::Derived => {
+                let avs = if avc > av {
+                    let lin =
+                        10f32.powf(avc / 20.) - if av > 0. { 10f32.powf(av / 20.) } else { 0. };
+                    20. * lin.log10()
                 } else {
-                    out.f0 = 0.;
-                }
+                    0.
+                };
+                (av, avs)
             }
-            self.time_rel += FRAME_TIME;
-            if self.time_rel >= self.phone_dur {
-                self.cur_phone = None;
-            }
+            Voicing::Direct => (av, avc),
         }
     }
+}
+
+/// Context rules from appendix C that can be switched off for ablation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum Rule {
+    /// C.5: no backward smoothing of af after a plosive.
+    MintimeAf,
+    /// C.5: av is DISSMO out of an unvoiced segment, SMODIS into one.
+    AvTrantype,
+    /// C.5, figure C-1: pre-aspiration before a pause or an unvoiced
+    /// consonant after a sonorant.
+    Preasp,
+    /// C.5: frication starts 20 ms early after a sonorant.
+    EarlyAf,
+    /// C.5: formant transitions out of a stop use Tcobst (table C-6).
+    Tcobst,
+    /// C.5: amplitude and formant transition types (the final rule pair).
+    AmpTrantype,
+}
+
+/// How to read the final ELSE rule of C.5.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum AmpElse {
+    /// Only amplitude transitions still at the default become DISSMO, so the
+    /// earlier av rules take effect.
+    #[default]
+    Preserve,
+    /// Every amplitude transition becomes DISSMO, overriding the earlier av
+    /// rules.
+    Literal,
+}
+
+/// Options controlling rendering, mostly for ablation.
+#[derive(Clone, Debug)]
+pub struct Options {
+    /// Rules switched off.
+    pub disabled: Vec<Rule>,
+    pub amp_else: AmpElse,
+    pub voicing: Voicing,
+    /// Raise the nasal zero to 450 Hz in nasals (C.4, C.8.4). Otherwise it
+    /// stays at 250 Hz, cancelling the nasal pole.
+    pub nasal_zero: bool,
+    /// Smooth transitions between segments (figure 11-6). Otherwise every
+    /// transition is DISCON.
+    pub smooth: bool,
+}
+
+impl Options {
+    fn on(&self, rule: Rule) -> bool {
+        !self.disabled.contains(&rule)
+    }
+}
+
+/// C.4
+const ASPAMP: f32 = 51.;
+
+/// Table C-6: duration of forward smoothing for obstruents (Tcobst), in ms.
+fn tcobst(phone: Phone) -> Option<f32> {
+    use Phone::*;
+    Some(match phone {
+        Bb | Em | Ff | Mm | Vv => 60.,
+        Dd | Dh | El | En | Hh | Hx | Nn | Pp | Qq | Sil | Ss | Th | Tq | Tt | Zz => 80.,
+        Ch | Gg | Gp | Kk | Kp | Ng | Sh | Zh => 100.,
+        _ => return None,
+    })
+}
+
+/// F0 used when the input does not specify one.
+const DEFAULT_F0: f32 = 160.0;
+
+/// One phonetic segment, as output by PROSOD.
+#[derive(Clone, Debug)]
+pub struct Segment {
+    pub phone: Phone,
+    /// Duration in ms
+    pub dur: u32,
+    /// F0 target in Hz
+    pub f0: f32,
+    #[allow(unused, reason = "will be used in phonet rules")]
+    pub stressed: bool,
+}
+
+/// Parse segments from text.
+///
+/// Each nonblank line is `phone duration_ms [f0_hz]`, with an optional
+/// leading `'` on the phone to mark stress. Text after `#` is a comment.
+/// A line with no numbers is a whitespace-separated list of phones, each
+/// using its inherent duration from table 9-1.
+pub fn parse_segments(text: &str) -> Result<Vec<Segment>, String> {
+    let mut segs = vec![];
+    for (lineno, line) in text.lines().enumerate() {
+        let err = |e: String| format!("line {}: {e}", lineno + 1);
+        let line = line.split('#').next().unwrap().trim();
+        if line.is_empty() {
+            continue;
+        }
+        let toks: Vec<&str> = line.split_whitespace().collect();
+        let has_numbers = toks.iter().skip(1).any(|t| t.parse::<f32>().is_ok());
+        if !has_numbers {
+            for tok in toks {
+                segs.push(parse_one(tok, None, None).map_err(err)?);
+            }
+            continue;
+        }
+        let dur = toks[1]
+            .parse::<u32>()
+            .map_err(|_| err(format!("bad duration {}", toks[1])))?;
+        let f0 = match toks.get(2) {
+            Some(s) => Some(s.parse::<f32>().map_err(|_| err(format!("bad f0 {s}")))?),
+            None => None,
+        };
+        segs.push(parse_one(toks[0], Some(dur), f0).map_err(err)?);
+    }
+    Ok(segs)
+}
+
+fn parse_one(tok: &str, dur: Option<u32>, f0: Option<f32>) -> Result<Segment, String> {
+    let (stressed, name) = match tok.strip_prefix('\'') {
+        Some(rest) => (true, rest),
+        None => (false, tok),
+    };
+    let phone =
+        Phone::parse(&name.to_ascii_lowercase()).ok_or_else(|| format!("unknown phone {tok}"))?;
+    let dur = match dur {
+        Some(d) => d,
+        None => phone_duration(phone)
+            .map(|d| d.inherent_duration as u32)
+            .ok_or_else(|| format!("no inherent duration for {tok}"))?,
+    };
+    Ok(Segment {
+        phone,
+        dur,
+        f0: f0.unwrap_or(DEFAULT_F0),
+        stressed,
+    })
+}
+
+// Parameters drawn by the smoothing engine, in the order of tables C-1 and
+// C-2, with fnz appended. F0 is handled separately.
+const AV: usize = 0;
+const AVC: usize = 1;
+const ASP: usize = 2;
+const AF: usize = 3;
+const A2: usize = 4;
+const AB: usize = 9;
+const F1: usize = 10;
+const F2: usize = 11;
+const F3: usize = 12;
+const F4: usize = 13;
+const B1: usize = 14;
+const B3: usize = 16;
+const FNZ: usize = 17;
+const N_PAR: usize = 18;
+
+type Pars = [f32; N_PAR];
+
+/// Table C-3: default duration of forward smoothing (Tcf), in ms.
+const TCF_DEFAULT: Pars = [
+    25., 20., 20., 40., // av, avc, asp, af
+    40., 40., 40., 40., 40., 40., // a2..a6, ab
+    80., 80., 80., 80., // f1..f4
+    80., 80., 80.,  // b1..b3
+    150., // fnz
+];
+
+/// Transition types, figure 11-6.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[allow(
+    dead_code,
+    reason = "SMODIS and DISSMO are set by context rules, not yet implemented"
+)]
+enum Trantype {
+    /// Discontinuous: jump straight to the target.
+    Discon,
+    /// Smooth backward and forward.
+    Setsmo,
+    /// Smooth backward to the boundary, then jump.
+    Smodis,
+    /// Jump at the boundary, then smooth forward.
+    Dissmo,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Manner {
+    Vowel = 0,
+    Stop = 1,
+    Fricative = 2,
+    Sonorant = 3,
+}
+
+impl Manner {
+    /// C.4
+    fn of(phone: Phone) -> Self {
+        if phone.is(Flags::VOWEL) {
+            Manner::Vowel
+        } else if phone.is(Flags::STOP) {
+            Manner::Stop
+        } else if phone.is(Flags::FRICATIVE) {
+            Manner::Fricative
+        } else {
+            Manner::Sonorant
+        }
+    }
+}
+
+/// Table C-4: default Bper, indexed by [previous manner][current manner].
+const BPER_DEFAULT: [[f32; 4]; 4] = [
+    [50., 35., 50., 75.],
+    [65., 50., 50., 65.],
+    [50., 50., 50., 75.],
+    [25., 35., 25., 50.],
+];
+
+/// Table targets for a phone (C.4), before any context rules.
+fn table_target(phone: Phone, next: Option<Phone>, opts: &Options) -> Pars {
+    let mut out = [0.; N_PAR];
+    let target = vocalic_target(phone)
+        .or_else(|| nonvocalic_target(phone))
+        .unwrap_or_else(|| nonvocalic_target(Phone::Sil).unwrap());
+    out[..17].copy_from_slice(&target.values());
+    // HH and HX inherit frequency targets from the next segment.
+    if matches!(phone, Phone::Hh | Phone::Hx) {
+        if let Some(next) = next {
+            let next_target = table_target(next, None, opts);
+            out[F1..=F4].copy_from_slice(&next_target[F1..=F4]);
+        }
+    }
+    out[FNZ] = if opts.nasal_zero && phone.is(Flags::NASAL) {
+        450.
+    } else {
+        250.
+    };
+    out
+}
+
+/// Parameter tracks on a 1 ms grid.
+struct Tracks {
+    v: Vec<Pars>,
+}
+
+impl Tracks {
+    fn at(&self, p: usize, t: u32) -> f32 {
+        self.v[(t as usize).min(self.v.len() - 1)][p]
+    }
+
+    /// Draw a straight line from (t0, v0) to (t1, v1), inclusive.
+    fn line(&mut self, p: usize, t0: u32, v0: f32, t1: u32, v1: f32) {
+        let t1 = (t1 as usize).min(self.v.len() - 1);
+        let t0 = t0 as usize;
+        for t in t0..=t1 {
+            let u = if t1 > t0 {
+                (t - t0) as f32 / (t1 - t0) as f32
+            } else {
+                1.0
+            };
+            self.v[t][p] = v0 + (v1 - v0) * u;
+        }
+    }
+
+    /// Hold a value from t0 to the end of the utterance.
+    fn hold(&mut self, p: usize, t0: u32, v: f32) {
+        for frame in &mut self.v[t0 as usize..] {
+            frame[p] = v;
+        }
+    }
+}
+
+/// Render segments to a sequence of frames, one per `FRAME_TIME` ms.
+///
+/// Parameter tracks are drawn segment by segment as in section 11.3: the
+/// target for each segment is drawn, then the boundary with the previous
+/// segment is smoothed using one of the templates of figure 11-6. Only the
+/// default (context-free) parts of appendix C are applied so far: table
+/// targets (C.4), Tcf from table C-3, Bper from table C-4, SETSMO, and the
+/// generic boundary values and minimum formant separation of C.10.
+///
+/// Diphthongs move linearly toward their second target over the segment
+/// (a placeholder for C.7.1). F0 is interpolated linearly between segment
+/// midpoints.
+pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
+    // F0 anchor points at segment midpoints.
+    let mut f0_points = vec![];
+    let mut start = 0;
+    for seg in segs {
+        f0_points.push((start as f32 + 0.5 * seg.dur as f32, seg.f0));
+        start += seg.dur;
+    }
+    let total = start;
+
+    // The utterance starts from silence.
+    let sil = table_target(Phone::Sil, None, opts);
+    let mut tracks = Tracks {
+        v: vec![sil; total as usize + 1],
+    };
+
+    let mut start = 0;
+    let mut prev_start = 0;
+    for (i, seg) in segs.iter().enumerate() {
+        let phone = seg.phone;
+        let prev = if i > 0 { segs[i - 1].phone } else { Phone::Sil };
+        let next = segs.get(i + 1).map(|s| s.phone);
+        let end = start + seg.dur;
+
+        // C.4 initialization
+        let mut target = table_target(phone, next, opts);
+        let mut cumdur = [start; N_PAR];
+        let mut mintime = [prev_start; N_PAR];
+        let mut trantype = [Trantype::Setsmo; N_PAR];
+        let mut tcf = TCF_DEFAULT;
+        let bper = BPER_DEFAULT[Manner::of(prev) as usize][Manner::of(phone) as usize];
+        let mut aspdux = 0;
+        let mut aspaml = ASPAMP;
+        let mut oldval_avc_inc = 0.;
+
+        // C.5 general rules. (The F0 rules are omitted, since F0 is not yet
+        // drawn by this engine.)
+        // Suppress amplitude smoothing after plosive.
+        if opts.on(Rule::MintimeAf) && prev.is(Flags::PLOSIVE) {
+            mintime[AF] = cumdur[AF];
+        }
+        // Discontinuous transition out of unvoiced segment.
+        if opts.on(Rule::AvTrantype) && !prev.is(Flags::VOICED) {
+            trantype[AV] = Trantype::Dissmo;
+        }
+        // Breathy offset into a pause.
+        if opts.on(Rule::Preasp) && prev != Phone::Sil && phone == Phone::Sil {
+            aspdux = 30;
+            oldval_avc_inc = 6.;
+            aspaml = ASPAMP;
+        }
+        // Aspiration between voiced sonorant and following unvoiced
+        // consonant intrudes on the voicing.
+        if opts.on(Rule::Preasp) && prev.is(Flags::SONORANT) && !phone.is(Flags::VOICED) {
+            aspdux = 10;
+        }
+        // Start frication early if fricative follows sonorant.
+        if opts.on(Rule::EarlyAf)
+            && prev.is(Flags::SONORANT)
+            && !phone.is(Flags::VOICED)
+            && phone.is(Flags::FRICATIVE)
+        {
+            cumdur[AF] = cumdur[AF].saturating_sub(20);
+        }
+        if opts.on(Rule::Preasp)
+            && prev.is(Flags::SONORANT)
+            && !phone.is(Flags::VOICED)
+            && phone.is(Flags::STOP)
+        {
+            aspaml -= 6.;
+        }
+        // F0 transitions into and out of voiceless segments are
+        // discontinuous.
+        if opts.on(Rule::AvTrantype) && !phone.is(Flags::VOICED) {
+            trantype[AV] = Trantype::Smodis;
+        }
+        if opts.on(Rule::Tcobst) && prev.is(Flags::STOP) && !phone.is(Flags::STOP) {
+            if let Some(t) = tcobst(prev) {
+                tcf[F1..=B3].fill(t);
+            }
+        }
+        if opts.on(Rule::AmpTrantype) {
+            if prev.is(Flags::STOP | Flags::NASAL)
+                && !phone.is(Flags::STOP)
+                && phone.is(Flags::VOICED)
+            {
+                trantype[AV] = Trantype::Discon;
+                trantype[AVC] = Trantype::Discon;
+                trantype[AF..=B3].fill(Trantype::Dissmo);
+            } else {
+                for p in AV..=AB {
+                    // Read literally, this ELSE overrides every amplitude
+                    // transition type set above. The alternative reading only
+                    // replaces ones still at the default.
+                    if opts.amp_else == AmpElse::Literal || trantype[p] == Trantype::Setsmo {
+                        trantype[p] = Trantype::Dissmo;
+                    }
+                }
+                trantype[F1..=B3].fill(Trantype::Setsmo);
+            }
+        }
+        if !opts.smooth {
+            trantype = [Trantype::Discon; N_PAR];
+        }
+
+        // Pre-aspiration (figure C-1): shift Cumdur[asp] earlier by Aspdux,
+        // force asp there to Aspaml, and smooth linearly over the preceding
+        // 30 ms.
+        if aspdux > 0 {
+            let ta = start.saturating_sub(aspdux);
+            let t0 = ta.saturating_sub(30);
+            tracks.line(ASP, t0, tracks.at(ASP, t0), ta, aspaml);
+            tracks.hold(ASP, ta, aspaml);
+            cumdur[ASP] = ta;
+            mintime[ASP] = ta;
+        }
+
+        let mut oldval: Pars = std::array::from_fn(|p| tracks.at(p, cumdur[p]));
+        oldval[AVC] += oldval_avc_inc;
+
+        // C.10 modifications (generic parts)
+        // Minimum formant separation is 200 Hz.
+        for p in F1..F4 {
+            target[p + 1] = target[p + 1].max(target[p] + 200.);
+        }
+        let tcb = tcf;
+        let bvalf: Pars = std::array::from_fn(|p| {
+            if p <= AB {
+                // Amplitudes: average of target and old value.
+                0.5 * (target[p] + oldval[p])
+            } else {
+                (bper * target[p] + (100. - bper) * oldval[p]) / 100.
+            }
+        });
+        let bvalb = bvalf;
+
+        // Draw all parameter tracks (figure 11-6).
+        let glide = vocalic_target_glide(phone).map(|g| g.values());
+        for p in 0..N_PAR {
+            let t1 = cumdur[p];
+            if matches!(trantype[p], Trantype::Setsmo | Trantype::Smodis) {
+                let tb = t1.saturating_sub(tcb[p] as u32).max(mintime[p]);
+                tracks.line(p, tb, tracks.at(p, tb), t1, bvalb[p]);
+            }
+            if matches!(trantype[p], Trantype::Setsmo | Trantype::Dissmo) {
+                let tf = t1 + tcf[p] as u32;
+                if tf > end {
+                    // Target not reached within the segment.
+                    let u = (end - t1) as f32 / (tf - t1) as f32;
+                    tracks.line(p, t1, bvalf[p], end, bvalf[p] + (target[p] - bvalf[p]) * u);
+                } else {
+                    tracks.line(p, t1, bvalf[p], tf, target[p]);
+                    tracks.hold(p, tf, target[p]);
+                }
+            } else {
+                tracks.hold(p, t1, target[p]);
+            }
+            // Diphthong placeholder: add a linear glide toward the second
+            // target over the course of the segment.
+            if let Some(glide) = glide
+                && (F1..=F3).contains(&p)
+            {
+                let delta = glide[p - F1] - target[p];
+                for t in t1..=end.min(total) {
+                    let u = (t - t1) as f32 / (end - t1) as f32;
+                    tracks.v[t as usize][p] += delta * u;
+                }
+            }
+            let end_val = tracks.at(p, end);
+            tracks.hold(p, end.min(total), end_val);
+        }
+        prev_start = start;
+        start = end;
+    }
+
+    let mut frames = vec![];
+    let mut out = KlattParams::default();
+    let mut t = 0;
+    while t < total {
+        let v = &tracks.v[t as usize];
+        let (av, avs) = opts.voicing.map(v[AV], v[AVC]);
+        out.av = av;
+        out.avs = avs;
+        out.ah = v[ASP];
+        out.af = v[AF];
+        out.a2 = v[A2];
+        out.a3 = v[A2 + 1];
+        out.a4 = v[A2 + 2];
+        out.a5 = v[A2 + 3];
+        out.a6 = v[A2 + 4];
+        out.ab = v[AB];
+        out.f1 = v[F1];
+        out.f2 = v[F2];
+        out.f3 = v[F3];
+        out.f4 = v[F4];
+        out.b1 = v[B1];
+        out.b2 = v[B1 + 1];
+        out.b3 = v[B3];
+        out.fnz = v[FNZ];
+        // Voiceless segments have av = avc = 0 in the tables, so F0 can
+        // stay on throughout.
+        out.f0 = interp_f0(&f0_points, t as f32);
+        frames.push(out.clone());
+        t += FRAME_TIME;
+    }
+    frames
+}
+
+fn interp_f0(points: &[(f32, f32)], t: f32) -> f32 {
+    let i = points.partition_point(|&(pt, _)| pt <= t);
+    if i == 0 {
+        return points[0].1;
+    }
+    if i == points.len() {
+        return points[i - 1].1;
+    }
+    let (t0, f0) = points[i - 1];
+    let (t1, f1) = points[i];
+    f0 + (f1 - f0) * (t - t0) / (t1 - t0)
 }

@@ -12,7 +12,7 @@ use crate::klatt::KlattParams;
 /// The list taken from Appendix B of the book, in alphabetical order. However, qq has
 /// been added, as it's referenced elsewhere but is missing from that table.
 #[repr(u8)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phone {
     Aa,
     Ae,
@@ -80,10 +80,11 @@ pub enum Phone {
 const N_PHONE: usize = 61;
 
 pub struct ParamTarget {
-    // Actually not 100% sure what the distinction is between av and avc,
-    // it doesn't seem to be explained in the book.
-    #[allow(unused)]
+    /// Amplitude of normal voicing (AV).
     av: u8,
+    /// Total amplitude of voicing. The book doesn't define this, but the
+    /// data is consistent with it being the linear sum of AV and AVS
+    /// (quasi-sinusoidal voicing); see `phonet::Voicing`.
     avc: u8,
     asp: u8,
     af: u8,
@@ -288,6 +289,25 @@ impl ParamTarget {
         }
     }
 
+    /// All values in table order: av, avc, asp, af, a2..a6, ab, f1..f4, b1..b3.
+    pub fn values(&self) -> [f32; 17] {
+        [
+            self.av, self.avc, self.asp, self.af, self.a2, self.a3, self.a4, self.a5, self.a6,
+            self.ab,
+        ]
+        .map(|x| x as f32)
+        .into_iter()
+        .chain(
+            [
+                self.f1, self.f2, self.f3, self.f4, self.b1, self.b2, self.b3,
+            ]
+            .map(|x| x as f32),
+        )
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap()
+    }
+
     pub fn update(&self, params: &mut KlattParams) {
         params.av = self.avc as f32;
         params.ah = self.asp as f32;
@@ -309,6 +329,11 @@ impl ParamTarget {
 }
 
 impl ParamTargetGlide {
+    /// Diphthong targets f1, f2, f3.
+    pub fn values(&self) -> [f32; 3] {
+        [self.f1, self.f2, self.f3].map(|x| x as f32)
+    }
+
     const fn new(f1: u16, f2: u16, f3: u16) -> Self {
         Self { f1, f2, f3 }
     }

@@ -1,0 +1,23 @@
+# "The old man sat in a rocker."
+# PROSOD output from figure 9-1 of the MITalk book (phone, duration ms, F0 Hz).
+# The F0 values there come from an obsolete algorithm, but serve as a start.
+sil 30 133.4
+dh 50 123.4
+iy 105 131.4
+'ow 170 174.5
+lx 75 151.0
+dd 50 146.0
+'mm 70 151.0
+'ae 210 157.0
+nn 55 117.9
+'ss 100 122.9
+'ae 175 153.9
+dx 20 140.1
+ih 55 148.1
+nn 50 142.5
+ax 60 142.5
+'rr 80 140.2
+'aa 160 146.2
+kk 65 113.1
+er 170 108.1
+sil 400 111.2

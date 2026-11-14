@@ -5,16 +5,33 @@
 
 const N_FORMANTS: usize = 5;
 
+/// Calibration of the voicing sources relative to the noise sources, in dB.
+///
+/// With the NDBSCA scale factors alone, a vowel at AV=60 comes out about
+/// 40 dB weaker than /s/ at AF=60, which is far from natural balance. The
+/// MITalk tables assume Klatt's own calibration, so this compensates. It
+/// was previously applied as `av += 40` in the callers. The true source of
+/// the discrepancy is not yet known (the RGP gain is one candidate).
+const VOICING_CAL_DB: f32 = 40.0;
+
 #[derive(Default)]
 pub struct Klatt {
     rgp: Resonator,
     rgz: AntiResonator,
+    /// RGP for the quasi-sinusoidal voicing (AVS) branch
+    rgp_s: Resonator,
+    /// Low-pass resonator for quasi-sinusoidal voicing
+    rgs: Resonator,
+    rnp: Resonator,
+    rnz: AntiResonator,
     cascade: [Resonator; N_FORMANTS],
     // r2 through r6
     par: [Resonator; 5],
     apar: [f32; 5],
     /// Amplitude of impulse
     impuls: f32,
+    /// Amplitude of impulse for quasi-sinusoidal voicing
+    impuls_s: f32,
     pulse_period: usize,
     pulse_phase: usize,
     noise: Noise,
@@ -171,18 +188,23 @@ impl Klatt {
     pub fn process(&mut self) -> f32 {
         // Impulse train combined with first derivative
         let mut input = 0.0;
+        let mut input_s = 0.0;
         if self.pulse_phase >= self.pulse_period {
             self.pulse_phase = 0;
         }
         if self.pulse_phase < 2 {
             if self.pulse_phase == 0 {
                 input = self.impuls;
+                input_s = self.impuls_s;
             } else {
                 input = -self.impuls;
+                input_s = -self.impuls_s;
             }
         }
         let ygp = self.rgp.process(input);
         let ygz = self.rgz.process(ygp);
+        // Quasi-sinusoidal voicing: impulses low-passed by RGP and RGS
+        let ygs = self.rgs.process(self.rgp_s.process(input_s));
         let mut noise = self.noise.next_pseudogauss();
         if self.pulse_phase * 2 > self.pulse_period {
             noise *= 0.5;
@@ -191,12 +213,11 @@ impl Klatt {
         // TODO: linear smoothing of aspiration amplitude
         let uasp = self.aaspir * noise;
         let ufric = self.afric * noise;
-        let uglot = ygz + uasp;
-        let mut y = uglot;
+        let uglot = ygz + ygs + uasp;
+        let mut y = self.rnz.process(self.rnp.process(uglot));
         for res in self.cascade.iter_mut().rev() {
             y = res.process(y);
         }
-        // TODO: nasal
         let ulipsv = y;
         // parallel resonators; for now we're processing noise only
         let y2p = self.par[0].process(self.apar[0] * ufric);
@@ -212,7 +233,11 @@ impl Klatt {
     pub fn set(&mut self, params: &KlattParams) {
         let radians_per_sample = 2.0 * core::f32::consts::PI / params.sr;
         // amplitude scale factors are from NDBSCA in Klatt 80
-        self.impuls = db_to_linear(params.av, 72.0) * params.f0;
+        let av_scale = 72.0 - VOICING_CAL_DB;
+        self.impuls = db_to_linear(params.av, av_scale) * params.f0;
+        // AVS uses the same scale as AV, so that the two branches have
+        // comparable low-frequency gain.
+        self.impuls_s = db_to_linear(params.avs, av_scale) * params.f0;
         self.pulse_period = (params.sr / params.f0).round() as usize;
         self.cascade[0].set(params.f1, params.b1, radians_per_sample);
         self.cascade[1].set(params.f2, params.b2, radians_per_sample);
@@ -228,6 +253,10 @@ impl Klatt {
         // Source comment says "set gain to constant in mid-frequency region for rgp"
         // self.rgp.a = 0.007;
         self.rgz.set(params.fgz, params.bgz, radians_per_sample);
+        self.rgp_s.set(params.fgp, params.bgp, radians_per_sample);
+        self.rgs.set(0.0, params.bgs, radians_per_sample);
+        self.rnp.set(params.fnp, params.bnp, radians_per_sample);
+        self.rnz.set(params.fnz, params.bnz, radians_per_sample);
         self.aaspir = db_to_linear(params.ah, 102.0);
         self.afric = db_to_linear(params.af, 72.0);
         self.apar[0] = db_to_linear(params.a2, 65.0);

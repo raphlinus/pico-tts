@@ -92,6 +92,24 @@ struct KlattCmd {
 struct PhonetCmd {
     out_file: String,
     params: String,
+    /// Mapping of the av/avc table columns to AV/AVS
+    #[arg(long, value_enum, default_value_t)]
+    voicing: phonet::Voicing,
+    /// Disable the nasal zero (FNZ stays at 250 Hz, cancelling the nasal pole)
+    #[arg(long)]
+    no_nasal_zero: bool,
+    /// Disable a context rule (may be repeated)
+    #[arg(long, value_enum)]
+    disable: Vec<phonet::Rule>,
+    /// Reading of the final ELSE rule in C.5
+    #[arg(long, value_enum, default_value_t)]
+    amp_else: phonet::AmpElse,
+    /// Disable smoothing between segments (all transitions DISCON)
+    #[arg(long)]
+    no_smooth: bool,
+    /// Output gain in dB
+    #[arg(long, default_value = "0")]
+    gain: f32,
 }
 
 fn read_wav(filename: String) -> (hound::WavSpec, Vec<i16>) {
@@ -299,7 +317,6 @@ fn main_klatt(args: KlattCmd) {
             target.update(&mut klatt_params);
         }
         klatt_params.f0 = 160.;
-        klatt_params.av += 40.;
     } else {
         let params: Vec<f32> = args
             .params
@@ -338,30 +355,47 @@ fn main_phonet(args: PhonetCmd) {
         bits_per_sample: 16,
         sample_format: hound::SampleFormat::Int,
     };
-    let mut writer = hound::WavWriter::create(args.out_file, spec).unwrap();
-    let mut phonet = phonet::Phonet::default();
-    let mut phones = args.params.split(' ');
-    let mut klatt = crate::klatt::Klatt::default();
-
-    let mut klatt_params = KlattParams::default();
-    loop {
-        if phonet.inp_ready() {
-            if let Some(phone) = phones.next() {
-                if let Some(p) = phones::Phone::parse(phone) {
-                    phonet.push_phone(p);
-                }
-            } else {
-                break;
-            }
+    // The input is either a file of timed segments or a list of phones.
+    let text = std::fs::read_to_string(&args.params).unwrap_or_else(|_| args.params.clone());
+    let segs = match phonet::parse_segments(&text) {
+        Ok(segs) => segs,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
         }
-        phonet.get_frame(&mut klatt_params);
+    };
+    let mut writer = hound::WavWriter::create(args.out_file, spec).unwrap();
+    let mut klatt = crate::klatt::Klatt::default();
+    let samples_per_frame = (spec.sample_rate * phonet::FRAME_TIME / 1000) as usize;
+    let gain = 16384. * 10f32.powf(args.gain / 20.);
+    let mut peak = 0f32;
+    let mut n_clip = 0;
+    for klatt_params in phonet::render(
+        &segs,
+        &phonet::Options {
+            disabled: args.disable.clone(),
+            amp_else: args.amp_else,
+            voicing: args.voicing,
+            nasal_zero: !args.no_nasal_zero,
+            smooth: !args.no_smooth,
+        },
+    ) {
         klatt.set(&klatt_params);
-        for _ in 0..50 {
-            let y = klatt.process();
-            let yi = (y * 16384.).clamp(-32768.0, 32767.) as i16;
-            writer.write_sample(yi).unwrap();
+        for _ in 0..samples_per_frame {
+            let y = klatt.process() * gain;
+            peak = peak.max(y.abs());
+            if y.abs() > 32767. {
+                n_clip += 1;
+            }
+            writer
+                .write_sample(y.clamp(-32768.0, 32767.) as i16)
+                .unwrap();
         }
     }
+    eprintln!(
+        "peak {:.1} dBFS, {n_clip} samples clipped",
+        20. * (peak / 32768.).log10()
+    );
 
     writer.finalize().unwrap();
 }

@@ -5,12 +5,10 @@
 //! is a sequence of segments with durations, ready for PHONET.
 
 use crate::{
+    f0::{self, End, Syl},
     phones::{Flags, Phone, phone_duration},
     phonet::Segment,
 };
-
-/// F0 used until the F0 rules of chapter 10 are implemented.
-const FLAT_F0: f32 = 120.0;
 
 /// Silence at the start of an utterance (as in figure 9-1).
 const INITIAL_SILENCE: u32 = 30;
@@ -46,6 +44,8 @@ struct Word {
     start: usize,
     end: usize,
     boundary: Option<Boundary>,
+    /// A content word (`C:`), as opposed to a function word (`F:`).
+    content: bool,
     /// The word is emphasized (`!`, not part of table 8-1).
     emph: bool,
 }
@@ -72,6 +72,7 @@ pub fn prosod(text: &str) -> Result<Vec<Annotated>, String> {
                     start: segs.len(),
                     end: segs.len(),
                     boundary: None,
+                    content: tok == "C:",
                     emph: false,
                 });
             }
@@ -117,6 +118,8 @@ pub fn prosod(text: &str) -> Result<Vec<Annotated>, String> {
         seg: silence(INITIAL_SILENCE),
         note: String::new(),
     }];
+    // Index in `out` of each segment.
+    let mut out_idx = vec![0; segs.len()];
     for (wi, word) in words.iter().enumerate() {
         let nsyl = n_syll(word);
         let last_syl = nsyl.saturating_sub(1);
@@ -247,11 +250,12 @@ pub fn prosod(text: &str) -> Result<Vec<Annotated>, String> {
             }
             // Round up to the nearest 5 ms.
             let dur = ((dur / 5.).ceil() * 5.) as u32;
+            out_idx[i] = out.len();
             out.push(Annotated {
                 seg: Segment {
                     phone,
                     dur,
-                    f0: FLAT_F0,
+                    f0: vec![],
                     stressed: s.stress == 1,
                 },
                 note: notes.join(" "),
@@ -269,6 +273,36 @@ pub fn prosod(text: &str) -> Result<Vec<Annotated>, String> {
         seg: silence(FINAL_SILENCE),
         note: String::new(),
     });
+
+    // Syllables for the F0 rules.
+    let mut syls = vec![];
+    for (wi, word) in words.iter().enumerate() {
+        let nuclei: Vec<usize> = (word.start..word.end).filter(|&i| syllabic(i)).collect();
+        // A stressless one-syllable content word is accented anyway.
+        let mono = nuclei.len() == 1 && segs[nuclei[0]].stress == 0;
+        for (k, &n) in nuclei.iter().enumerate() {
+            let range: Vec<usize> = (word.start..word.end)
+                .filter(|&i| segs[i].syllable == k)
+                .collect();
+            let last_syl = k + 1 == nuclei.len();
+            syls.push(Syl {
+                first: out_idx[range[0]],
+                nucleus: out_idx[n],
+                last: out_idx[*range.last().unwrap()],
+                accented: word.content && (segs[n].stress == 1 || mono),
+                emph: word.emph,
+                word: wi,
+                end: match word.boundary {
+                    Some(_) if !last_syl => None,
+                    Some(Boundary::Phrase) => Some(End::Phrase),
+                    Some(Boundary::Pause) if wi + 1 < words.len() => Some(End::Pause),
+                    Some(Boundary::Pause) => Some(End::Final),
+                    None => None,
+                },
+            });
+        }
+    }
+    f0::assign(&syls, &mut out);
     Ok(out)
 }
 
@@ -285,7 +319,7 @@ fn silence(dur: u32) -> Segment {
     Segment {
         phone: Phone::Sil,
         dur,
-        f0: FLAT_F0,
+        f0: vec![],
         stressed: false,
     }
 }

@@ -14,6 +14,7 @@ mod phonemes;
 mod phones;
 mod phonet;
 mod ascii;
+mod f0;
 mod prosod;
 mod sequence;
 mod synth;
@@ -384,11 +385,18 @@ fn main_phonet(args: PhonetCmd) {
         match prosod::prosod(&text) {
             Ok(ann) => {
                 for a in &ann {
+                    let f0: Vec<String> = a
+                        .seg
+                        .f0
+                        .iter()
+                        .map(|(p, f)| format!("{p:.2}:{f:.0}"))
+                        .collect();
                     eprintln!(
-                        "{:>4} {:>4} ms  {}",
+                        "{:>4} {:>4} ms  {:<28} {}",
                         format!("{:?}", a.seg.phone).to_uppercase(),
                         a.seg.dur,
-                        a.note
+                        a.note,
+                        f0.join(" ")
                     );
                 }
                 ann.into_iter().map(|a| a.seg).collect()

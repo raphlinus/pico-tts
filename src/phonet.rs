@@ -191,8 +191,9 @@ pub struct Segment {
     pub phone: Phone,
     /// Duration in ms
     pub dur: u32,
-    /// F0 target in Hz
-    pub f0: f32,
+    /// F0 targets as (position within the segment from 0 to 1, Hz). F0 is
+    /// interpolated linearly between the targets of all segments.
+    pub f0: Vec<(f32, f32)>,
     #[allow(unused, reason = "will be used in phonet rules")]
     pub stressed: bool,
 }
@@ -247,7 +248,7 @@ fn parse_one(tok: &str, dur: Option<u32>, f0: Option<f32>) -> Result<Segment, St
     Ok(Segment {
         phone,
         dur,
-        f0: f0.unwrap_or(DEFAULT_F0),
+        f0: vec![(0.5, f0.unwrap_or(DEFAULT_F0))],
         stressed,
     })
 }
@@ -392,15 +393,20 @@ impl Tracks {
 /// generic boundary values and minimum formant separation of C.10.
 ///
 /// Diphthongs move linearly toward their second target over the segment
-/// (a placeholder for C.7.1). F0 is interpolated linearly between segment
-/// midpoints.
+/// (a placeholder for C.7.1). F0 is interpolated linearly between the
+/// segments' F0 targets.
 pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
-    // F0 anchor points at segment midpoints.
+    // F0 anchor points.
     let mut f0_points = vec![];
     let mut start = 0;
     for seg in segs {
-        f0_points.push((start as f32 + 0.5 * seg.dur as f32, seg.f0));
+        for &(pos, f0) in &seg.f0 {
+            f0_points.push((start as f32 + pos * seg.dur as f32, f0));
+        }
         start += seg.dur;
+    }
+    if f0_points.is_empty() {
+        f0_points.push((0., DEFAULT_F0));
     }
     let total = start;
 

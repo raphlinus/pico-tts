@@ -160,7 +160,7 @@ impl AntiResonator {
         let r = (-0.5 * bw * radians_per_sample).exp();
         let c = -r * r;
         let b = 2. * r * (f * radians_per_sample).cos();
-        let a = 1. - self.b - self.c;
+        let a = 1. - b - c;
         self.a = 1. / a;
         self.b = -self.a * b;
         self.c = -self.a * c;

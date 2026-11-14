@@ -132,6 +132,10 @@ struct PhonetCmd {
     /// Disable smoothing between segments (all transitions DISCON)
     #[arg(long)]
     no_smooth: bool,
+    /// Coefficient updates per frame: formant frequencies and bandwidths
+    /// are interpolated linearly from the previous frame in this many steps.
+    #[arg(long, default_value_t = 1)]
+    interp: usize,
     /// Smooth F0 with Fujisaki's accent filter, with this natural frequency
     /// in 1/s (Fujisaki's beta is typically about 20)
     #[arg(long)]
@@ -469,6 +473,7 @@ fn main_phonet(args: PhonetCmd) {
     let mut peak = 0f32;
     let mut n_clip = 0;
     let mut frame_t = 0;
+    let mut prev_params: Option<klatt::KlattParams> = None;
     for klatt_params in phonet::render(
         &segs,
         &phonet::Options {
@@ -492,8 +497,26 @@ fn main_phonet(args: PhonetCmd) {
             );
             frame_t += phonet::FRAME_TIME;
         }
-        klatt.set(&klatt_params);
-        for _ in 0..samples_per_frame {
+        let n_steps = args.interp.max(1);
+        let prev = prev_params.replace(klatt_params.clone());
+        for i in 0..samples_per_frame {
+            if i * n_steps % samples_per_frame == 0 {
+                let k = i * n_steps / samples_per_frame + 1;
+                let t = k as f32 / n_steps as f32;
+                let mut p = klatt_params.clone();
+                if let Some(q) = &prev {
+                    let lerp = |a: f32, b: f32| a + (b - a) * t;
+                    p.f1 = lerp(q.f1, p.f1);
+                    p.f2 = lerp(q.f2, p.f2);
+                    p.f3 = lerp(q.f3, p.f3);
+                    p.f4 = lerp(q.f4, p.f4);
+                    p.b1 = lerp(q.b1, p.b1);
+                    p.b2 = lerp(q.b2, p.b2);
+                    p.b3 = lerp(q.b3, p.b3);
+                    p.fnz = lerp(q.fnz, p.fnz);
+                }
+                klatt.set(&p);
+            }
             let y = klatt.process() * gain;
             peak = peak.max(y.abs());
             if y.abs() > 32767. {

@@ -25,9 +25,9 @@ const ASP_CAL_DB: f32 = 30.0;
 
 /// Calibration of the parallel bypass path (AB), used for the flat-spectrum
 /// frication of FF, TH, DH, VV and the labial bursts. With none, FF came
-/// out about 37 dB below the vowel and sounded almost silent; 15 puts it
-/// about 22 dB below. Chosen by ear.
-const AB_CAL_DB: f32 = 15.0;
+/// out about 37 dB below the vowel and sounded almost silent; 20 puts it
+/// about 17 dB below. Chosen by ear (Raph preferred 20 over 15).
+const AB_CAL_DB: f32 = 20.0;
 
 #[derive(Default)]
 pub struct Klatt {

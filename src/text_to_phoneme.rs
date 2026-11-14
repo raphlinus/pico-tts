@@ -82,6 +82,8 @@ const RAW_RULES: &[&str] = &[
     " [ar]o=əɹ",
     "[ar]#=ɛɹ",
     " ^[as]#=ɛɪs",
+    " [a]^o=ə", // added: about, above, around, another
+    " [a]^ai=ə", // added: again, available
     "[a]wa=ə",
     "[aw]=ɔ",
     " :[any]=ɛni",
@@ -166,6 +168,9 @@ const RAW_RULES: &[&str] = &[
     "[eful]=fʊl",
     "[ee]=i",
     "[earn]=ɚn",
+    "[ear]ch=ɚ", // added: search, research
+    " [ear]l=ɚ", // added: early, earl (not clearly)
+    "[ear]th=ɚ", // added: earth
     " [ear]^=ɚ",
     "[ead]=ɛd",
     "#:[ea]=iə",
@@ -199,6 +204,7 @@ const RAW_RULES: &[&str] = &[
     " [in]=ɪn",
     "[in]d=aɪn",
     "#:[ier]=iɚ", // added: earlier, happier (not pier)
+    "[i]ty =ɪ", // added: city, -ity
     "[ier]=iɹ",
     "#:r[ied] =id",
     "[ied] =aɪd",
@@ -236,6 +242,8 @@ const RAW_RULES: &[&str] = &[
     "[mov]=muv",
     "[m]=m",
     "e[ng]+=ndʒ",
+    "[ng]e =ndʒ", // added: fringe, hinge, sponge
+    "[ng]es =ndʒ", // added: fringes
     "[ng]r=ŋg",
     "[ng]#=ŋg",
     "[ngl]%=ŋgəl",
@@ -261,6 +269,7 @@ const RAW_RULES: &[&str] = &[
     "[ought]=ɔt",
     "[ough]=əf",
     " [ou]=aw",
+    "[ouse] =aws", // added: house, mouse, blouse (not famous)
     "h[ou]s#=aw",
     "[ous]=əs",
     "[our]=ɔɹ",
@@ -295,6 +304,7 @@ const RAW_RULES: &[&str] = &[
     "[o]cus=o", // added
     "[o]=ɑ",
     "[phys]=fɪz", // added
+    "[photo]=foto",
     "[ph]=f",
     "[peop]=pip",
     "[pow]=paw",
@@ -406,6 +416,7 @@ const RAW_RULES: &[&str] = &[
 
 const DICTIONARY: &[(&str, &str)] = &[
     ("a", "ə"),
+    ("across", "əkɹɔs"),
     ("allow", "əlaw1"),
     ("answer", "æ1nsɚ"),
     ("antenna", "æntɛ1nə"), // mostly stress
@@ -418,13 +429,16 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("bear", "bɛɚ"),
     ("better", "bɛ1tɚ"), // only here for stress
     ("british", "bɹɪ1tɪʃ"),
+    ("category", "kæ1təgɔɹi"),
     ("certain", "sɚ1tən"),
     ("character", "kɛ1ɚəktɚ"),
+    ("chief", "tʃif"),
     ("children", "tʃɪldɹɛn"),
     ("civil", "sɪvəl"),
     ("clothing", "kloðɪŋ"),
     ("colonial", "kəlo1nɪəl"),
     ("color", "kʌ1lɚ"),
+    ("company", "kʌ1mpəni"),
     ("consider", "kʌnsɪ1dɚ"),
     ("control", "kʌntɹo1l"),
     ("contempt", "kʌntɛ1mt"),
@@ -453,15 +467,21 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("fortunate", "fɔ1ɹtʃənət"),
     ("gauge", "gɛɪdʒ"),
     ("gone", "gɔn"),
+    ("grief", "gɹif"),
     ("half", "hæf"),
     ("heard", "hɚd"),
     ("heart", "hɑɹt"),
     ("hey", "hɛɪ"),
+    ("honest", "ɔnɛst"),
     ("honor", "ʌ1nɚ"),
+    ("horizon", "hɔɹaɪ1zən"),
+    ("hostile", "hɑ1stəl"),
     ("hundred", "hʌndɹɛd"),
     ("i", "aɪ"),
     ("ideal", "aɪdi1l"),
+    ("incline", "ɪnklaɪ1n"),
     ("laugh", "læf"),
+    ("level", "lɛvəl"),
     ("listen", "lɪ1sɛn"),
     ("living", "lɪ1vɪŋ"),
     ("livelihood", "laɪ1vlihʊd"),
@@ -470,6 +490,7 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("machine", "mæʃi1n"),
     ("major", "mɛɪ1dʒɚ"),
     ("material", "məti1ɹi2əl"),
+    ("meant", "mɛnt"),
     ("mix", "mɪks"), // for suffix behavior
     ("money", "mʌ1ni"),
     ("muscle", "mʌsəl"),
@@ -478,26 +499,39 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("none", "nʌn"),
     ("now", "naw"),
     ("often", "ɔ1fɛn"),
+    ("online", "ɑnlaɪn"),
     ("operate", "ɔ1pɚɛɪ2t"),
+    ("panel", "pænəl"),
     ("piece", "pis"),
     ("pizza", "pitsə"),
+    ("poll", "pol"),
+    ("primetime", "pɹaɪmtaɪm"),
     ("private", "pɹaɪ1vət"),
     ("president", "pɹɛ1zɪdɛ2nt"),
+    ("privy", "pɹɪ1vi"),
+    ("profile", "pɹofaɪl"),
+    ("program", "pɹogɹæm"),
     ("promote", "pɹomo1t"), // stress
     ("pull", "pʊl"),
     ("push", "pʊʃ"),
+    ("quality", "kwɑ1lɪti"),
     ("rational", "ɹæ1ʃənəl"),
     ("reality", "ɹiæ1lɪti"),
+    ("reference", "ɹɛfɹɛns"),
     ("relative", "ɹɛ1lətɪv"),
     ("reply", "ɹɛplaɪ"),
+    ("revive", "ɹəvaɪv"),
     ("senior", "si1njɚ"),
     ("slavery", "slɛɪvɚi"),
     ("significant", "sɪgnɪ1fɪkənt"),
+    ("software", "sɔftwɛɹ"),
     ("someone", "sʌ1mwʌn"),
     ("sometimes", "sʌ1mtaɪ1mz"),
     ("spirit", "spi1ɹɪt"),
     ("supply", "sʌplaɪ1"),
     ("surprise", "sʌpɹaɪ1z"),
+    ("survive", "sɚvaɪ1v"),
+    ("tax", "tæks"),
     ("terrible", "tɛ1ɹɪbəl"),
     ("territory", "tɛ1ɹɪtɔɹ2i"),
     ("this", "ðɪs"),
@@ -512,9 +546,11 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("town", "tawn"),
     ("travel", "tɹævəl"),
     ("vague", "vɛɪg"),
+    ("veteran", "vɛ1təɹən"),
     ("vein", "vɛɪn"),
     ("want", "wʌnt"),
     ("weapon", "wɛ1pən"),
+    ("widespread", "waɪdspɹɛd"),
     ("window", "wɪ1ndo"),
     ("woman", "wʊ1mən"),
     ("women", "wɪ1mən"),
@@ -933,6 +969,14 @@ const STRESS_SUFFIXES: &[(&str, usize, SuffixStress)] = &[
     ("ical", 2, SuffixStress::Before),
     ("ics", 1, SuffixStress::Before),
     ("ic", 1, SuffixStress::Before),
+    ("graphy", 2, SuffixStress::Before),
+    ("graphers", 2, SuffixStress::Before),
+    ("grapher", 2, SuffixStress::Before),
+    ("logy", 2, SuffixStress::Before),
+    ("logist", 2, SuffixStress::Before),
+    ("logists", 2, SuffixStress::Before),
+    ("nomy", 2, SuffixStress::Before),
+    ("metry", 2, SuffixStress::Before),
     ("ities", 2, SuffixStress::Before),
     ("ity", 2, SuffixStress::Before),
     ("ety", 2, SuffixStress::Before),
@@ -1108,6 +1152,10 @@ impl TextToPhoneme {
         }
         for &(suf, ipa) in SUFFIXES {
             let Some(stem) = word.strip_suffix(suf) else { continue };
+            // Not loss → lose + s.
+            if suf == "s" && stem.ends_with('s') {
+                continue;
+            }
             // Spelled -es only after a sibilant or o (fixes, goes), not
             // honoress.
             if suf == "es"

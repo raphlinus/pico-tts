@@ -121,6 +121,10 @@ pub enum Rule {
     /// Experimental (not in the book): frication stops abruptly at the end
     /// of a fricative, as C.10 does for plosives. Off by default.
     FricOffset,
+    /// Experimental (not in the book): no backward formant smoothing into a
+    /// plosive, so the burst is shaped by the plosive's own formants rather
+    /// than the next segment's. Off by default.
+    ReleaseHold,
 }
 
 /// How to read the final ELSE rule of C.5.
@@ -205,6 +209,7 @@ const DEFAULT_OFF: &[Rule] = &[
     Rule::VelarF2,
     Rule::DevoiceAv,
     Rule::FricOffset,
+    Rule::ReleaseHold,
 ];
 
 impl Options {
@@ -544,6 +549,11 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
         // Suppress amplitude smoothing after plosive.
         if opts.on(Rule::MintimeAf) && prev.is(Flags::PLOSIVE) {
             mintime[AF] = cumdur[AF];
+        }
+        if opts.on(Rule::ReleaseHold) && prev.is(Flags::PLOSIVE) {
+            for p in F1..=B3 {
+                mintime[p] = cumdur[p];
+            }
         }
         // Discontinuous transition out of unvoiced segment.
         if opts.on(Rule::AvTrantype) && !prev.is(Flags::VOICED) {

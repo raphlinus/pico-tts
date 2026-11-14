@@ -487,6 +487,7 @@ const fn mk_flags() -> [Flags; N_PHONE] {
     set_flag!(
         r[Ae] = DIPHTHONG,
         FRONT,
+        LAX,
         LOW,
         SONORANT,
         SYLLABIC,
@@ -496,6 +497,7 @@ const fn mk_flags() -> [Flags; N_PHONE] {
     set_flag!(r[Ah] = SONORANT, SYLLABIC, VOICED, VOWEL);
     set_flag!(
         r[Ao] = DIPHTHONG,
+        LAX,
         LOW,
         ROUND,
         SONORANT,
@@ -512,7 +514,9 @@ const fn mk_flags() -> [Flags; N_PHONE] {
         VOWEL,
         WGLIDE
     );
-    set_flag!(r[Ax] = SCHWA, SONORANT, SYLLABIC, VOICED, VOWEL);
+    set_flag!(r[Ax] = LAX, SCHWA, SONORANT, SYLLABIC, VOICED, VOWEL);
+    // Axp is in no class but lax in C.3.
+    set_flag!(r[Axp] = LAX);
     set_flag!(
         r[Axr] = DIPHTHONG,
         LOW,
@@ -534,22 +538,39 @@ const fn mk_flags() -> [Flags; N_PHONE] {
     set_flag!(r[Bb] = LABIAL, PLOSIVE, STOP, VOICED);
     set_flag!(r[Ch] = AFFRICATE, PALATAL, PLOSIVE, STOP);
     set_flag!(r[Dd] = ALVEOLAR, PLOSIVE, STOP, VOICED);
-    set_flag!(r[Dh] = DENTAL, FRICATIVE, STOP, VOICED);
-    set_flag!(r[Dx] = ALVEOLAR, VOICED);
-    set_flag!(r[Eh] = DIPHTHONG, FRONT, SONORANT, SYLLABIC, VOICED, VOWEL);
+    set_flag!(r[Dh] = DENTAL, FRICATIVE, VOICED);
+    set_flag!(r[Dx] = ALVEOLAR, STOP, VOICED);
+    set_flag!(
+        r[Eh] = DIPHTHONG,
+        FRONT,
+        LAX,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL
+    );
     set_flag!(r[El] = LATERAL, LIQGLIDE, SONORANT, SYLLABIC, VOICED);
     set_flag!(r[Em] = LABIAL, NASAL, SONORANT, STOP, SYLLABIC, VOICED);
     set_flag!(r[En] = ALVEOLAR, NASAL, SONORANT, STOP, SYLLABIC, VOICED);
-    set_flag!(r[Er] = RETRO, SONORANT, SYLLABIC, VOICED);
+    set_flag!(r[Er] = RETRO, SONORANT, SYLLABIC, VOICED, VOWEL);
     set_flag!(
         r[Exr] = DIPHTHONG,
         FRONT,
         RGLIDE,
         SONORANT,
         SYLLABIC,
-        VOICED
+        VOICED,
+        VOWEL
     );
-    set_flag!(r[Ey] = DIPHTHONG, FRONT, SONORANT, SYLLABIC, VOICED, YGLIDE);
+    set_flag!(
+        r[Ey] = DIPHTHONG,
+        FRONT,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL,
+        YGLIDE
+    );
     set_flag!(r[Ff] = FRICATIVE, LABIAL);
     set_flag!(r[Gg] = PLOSIVE, STOP, VELAR, VOICED);
     set_flag!(r[Gp] = PALVEL, PLOSIVE, STOP, VOICED);
@@ -559,6 +580,7 @@ const fn mk_flags() -> [Flags; N_PHONE] {
         r[Ih] = DIPHTHONG,
         FRONT,
         HIGH,
+        LAX,
         SONORANT,
         SYLLABIC,
         VOICED,
@@ -567,6 +589,7 @@ const fn mk_flags() -> [Flags; N_PHONE] {
     set_flag!(
         r[Ix] = FRONT,
         HIGH,
+        LAX,
         SCHWA,
         SONORANT,
         SYLLABIC,
@@ -586,6 +609,8 @@ const fn mk_flags() -> [Flags; N_PHONE] {
     set_flag!(
         r[Iy] = DIPHTHONG,
         F2BACK,
+        FRONT,
+        HIGH,
         SONORANT,
         SYLLABIC,
         VOICED,
@@ -597,10 +622,18 @@ const fn mk_flags() -> [Flags; N_PHONE] {
     set_flag!(r[Kp] = PALVEL, PLOSIVE, STOP);
     set_flag!(r[Ll] = LATERAL, LIQGLIDE, SONORANT, VOICED);
     set_flag!(r[Lx] = LATERAL, LIQGLIDE, SONORANT, VOICED);
-    set_flag!(r[Mm] = NASAL, SONORANT, STOP, VOICED);
+    set_flag!(r[Mm] = LABIAL, NASAL, SONORANT, STOP, VOICED);
     set_flag!(r[Ng] = NASAL, SONORANT, STOP, VELAR, VOICED);
     set_flag!(r[Nn] = ALVEOLAR, NASAL, SONORANT, STOP, VOICED);
-    set_flag!(r[Ow] = DIPHTHONG, ROUND, SONORANT, SYLLABIC, VOICED, WGLIDE);
+    set_flag!(
+        r[Ow] = DIPHTHONG,
+        ROUND,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL,
+        WGLIDE
+    );
     set_flag!(
         r[Oxr] = DIPHTHONG,
         RGLIDE,
@@ -632,13 +665,23 @@ const fn mk_flags() -> [Flags; N_PHONE] {
     set_flag!(
         r[Uh] = DIPHTHONG,
         HIGH,
+        LAX,
         ROUND,
         SONORANT,
         SYLLABIC,
         VOICED,
         VOWEL
     );
-    set_flag!(r[Uw] = DIPHTHONG, ROUND, SYLLABIC, VOICED, VOWEL, WGLIDE);
+    set_flag!(
+        r[Uw] = DIPHTHONG,
+        HIGH,
+        ROUND,
+        SONORANT,
+        SYLLABIC,
+        VOICED,
+        VOWEL,
+        WGLIDE
+    );
     // Question: why is Uxr not DIPHTHONG?
     set_flag!(r[Uxr] = HIGH, RGLIDE, SONORANT, SYLLABIC, VOICED, VOWEL);
     set_flag!(r[Vv] = FRICATIVE, LABIAL, VOICED);
@@ -655,6 +698,7 @@ const fn mk_flags() -> [Flags; N_PHONE] {
     set_flag!(
         r[Yu] = DIPHTHONG,
         F2BACK,
+        FRONT,
         HIGH,
         ROUND,
         SONORANT,

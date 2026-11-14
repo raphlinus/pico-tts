@@ -23,6 +23,12 @@ const VOICING_CAL_DB: f32 = 40.0;
 /// about 6 dB and stop aspiration about 16 dB below it, chosen by ear.
 const ASP_CAL_DB: f32 = 30.0;
 
+/// Calibration of the parallel bypass path (AB), used for the flat-spectrum
+/// frication of FF, TH, DH, VV and the labial bursts. With none, FF came
+/// out about 37 dB below the vowel and sounded almost silent; 15 puts it
+/// about 22 dB below. Chosen by ear.
+const AB_CAL_DB: f32 = 15.0;
+
 #[derive(Default)]
 pub struct Klatt {
     rgp: Resonator,
@@ -279,7 +285,7 @@ impl Klatt {
         self.apar[2] = db_to_linear(params.a4, 78.0);
         self.apar[3] = db_to_linear(params.a5, 79.0);
         self.apar[4] = db_to_linear(params.a6, 80.0);
-        self.abpar = db_to_linear(params.ab, 84.0);
+        self.abpar = db_to_linear(params.ab, 84.0 - AB_CAL_DB);
     }
 }
 

@@ -416,6 +416,7 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("lose", "luz"),
     ("machine", "mæʃi1n"),
     ("major", "mɛɪ1dʒɚ"),
+    ("material", "məti1ɹi2əl"),
     ("money", "mʌ1ni"),
     ("national", "næ1ʃənəl"),
     ("none", "nʌn"),
@@ -980,6 +981,11 @@ const SUFFIXES: &[(&str, Option<&str>)] = &[
     ("ings", Some("ɪŋz")),
     ("ing", Some("ɪŋ")),
     ("able", Some("əbəl")),
+    ("ism", Some("ɪzəm")),
+    ("ist", Some("ɪst")),
+    ("ize", Some("aɪz")),
+    ("ship", Some("ʃɪp")),
+    ("hood", Some("hʊd")),
     ("ed", None),
     ("es", None),
     ("s", None),
@@ -1234,6 +1240,11 @@ mod tests {
     fn affixes() {
         let mut ttp = TextToPhoneme::new();
         ttp.dict.insert("fortunate", "fɔ1ɹtʃənət");
+        ttp.dict.insert("material", "mətɪ1ɹiəl");
+        assert_eq!(
+            ttp.to_ascii("materialism materialists materialized").unwrap(),
+            "C: mxt'IrixlIzxm C: mxt'IrixlIsts C: mxt'IrixlAzd ."
+        );
         assert_eq!(
             ttp.to_ascii("Unfortunately, fortunates.").unwrap(),
             "C: ^nf'cRCxnxtli , C: f'cRCxnxts ."

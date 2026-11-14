@@ -5,7 +5,7 @@
 //! is a sequence of segments with durations, ready for PHONET.
 
 use crate::{
-    f0::{self, End, Syl},
+    f0::{self, End, F0Consts, Syl},
     phones::{Flags, Phone, phone_duration},
     phonet::Segment,
 };
@@ -58,7 +58,11 @@ pub struct Annotated {
 }
 
 /// Parse a PHONO2 stream and compute durations.
-pub fn prosod(text: &str) -> Result<Vec<Annotated>, String> {
+pub fn prosod(
+    text: &str,
+    f0_consts: F0Consts,
+    f0_head: Option<f32>,
+) -> Result<Vec<Annotated>, String> {
     let mut segs: Vec<Seg> = vec![];
     let mut words: Vec<Word> = vec![];
     let mut syll_break = false;
@@ -290,6 +294,7 @@ pub fn prosod(text: &str) -> Result<Vec<Annotated>, String> {
                 nucleus: out_idx[n],
                 last: out_idx[*range.last().unwrap()],
                 accented: word.content && (segs[n].stress == 1 || mono),
+                stress: segs[n].stress,
                 emph: word.emph,
                 word: wi,
                 end: match word.boundary {
@@ -302,7 +307,7 @@ pub fn prosod(text: &str) -> Result<Vec<Annotated>, String> {
             });
         }
     }
-    f0::assign(&syls, &mut out);
+    f0::assign(&syls, &mut out, f0_consts, f0_head);
     Ok(out)
 }
 

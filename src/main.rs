@@ -123,6 +123,13 @@ struct PhonetCmd {
     /// in 1/s (Fujisaki's beta is typically about 20)
     #[arg(long)]
     f0_beta: Option<f32>,
+    /// Which constants the F0 rules use where the book and the narrator
+    /// differ
+    #[arg(long, value_enum, default_value_t)]
+    f0_consts: f0::F0Consts,
+    /// Override the head peak (first accent) of each clause, in Hz
+    #[arg(long)]
+    f0_head: Option<f32>,
     /// Output gain in dB
     #[arg(long, default_value = "0")]
     gain: f32,
@@ -386,7 +393,7 @@ fn main_phonet(args: PhonetCmd) {
     // PHONO2 input (with C:/F: word markers) gets durations from the
     // chapter 9 rules; otherwise the input gives them directly.
     let segs = if text.split_whitespace().any(|t| t == "C:" || t == "F:") {
-        match prosod::prosod(&text) {
+        match prosod::prosod(&text, args.f0_consts, args.f0_head) {
             Ok(ann) => {
                 for a in &ann {
                     let f0: Vec<String> = a

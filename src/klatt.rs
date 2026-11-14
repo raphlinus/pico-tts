@@ -17,6 +17,12 @@ const N_FORMANTS: usize = 5;
 /// AH=51), so the gap is probably in the cascade branch rather than RGP.
 const VOICING_CAL_DB: f32 = 40.0;
 
+/// Calibration of aspiration, which also enters the cascade branch. With
+/// none, AH=51 aspiration is about 60 dB below the vowel (inaudible). The
+/// voicing value (40) makes HH (AH=60) as loud as the vowel; 30 puts HH
+/// about 6 dB and stop aspiration about 16 dB below it, chosen by ear.
+const ASP_CAL_DB: f32 = 30.0;
+
 #[derive(Default)]
 pub struct Klatt {
     rgp: Resonator,
@@ -266,9 +272,7 @@ impl Klatt {
         self.rgs.set(0.0, params.bgs, radians_per_sample);
         self.rnp.set(params.fnp, params.bnp, radians_per_sample);
         self.rnz.set(params.fnz, params.bnz, radians_per_sample);
-        // Aspiration enters the cascade branch like voicing, and needs the
-        // same calibration to be audible at the levels MITalk uses.
-        self.aaspir = db_to_linear(params.ah, 102.0 - VOICING_CAL_DB);
+        self.aaspir = db_to_linear(params.ah, 102.0 - ASP_CAL_DB);
         self.afric = db_to_linear(params.af, 72.0);
         self.apar[0] = db_to_linear(params.a2, 65.0);
         self.apar[1] = db_to_linear(params.a3, 73.0);

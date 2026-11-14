@@ -3,6 +3,8 @@
 
 Usage: cmucheck.py BIN CMUDICT OUT.tsv [TEXT...]
 
+CMUDICT is cmudict.dict from https://github.com/cmusphinx/cmudict
+
 With TEXT files, checks the words that occur in them, ranked by how often
 they occur. Without, checks every CMUdict word that is also in
 /usr/share/dict/words.

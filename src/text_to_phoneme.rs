@@ -7,6 +7,8 @@ use bitflags::bitflags;
 pub struct TextToPhoneme {
     alpha_rules: [Vec<Rule>; 26],
     dict: HashMap<&'static str, &'static str>,
+    /// Print each dictionary hit, affix split and rule firing to stderr.
+    pub trace: bool,
 }
 
 #[derive(Debug)]
@@ -584,7 +586,11 @@ impl TextToPhoneme {
         for (word, phonemes) in DICTIONARY {
             dict.insert(*word, *phonemes);
         }
-        TextToPhoneme { alpha_rules, dict }
+        TextToPhoneme {
+            alpha_rules,
+            dict,
+            trace: false,
+        }
     }
 
     /// Translate text to phonemes.
@@ -600,6 +606,9 @@ impl TextToPhoneme {
                 }
                 let word_end = ix + 1 + pos;
                 if let Some(phonemes) = self.dict.get(&text[ix..word_end]) {
+                    if self.trace {
+                        eprintln!("  {:<16} dictionary {phonemes}", &text[ix..word_end]);
+                    }
                     result.push_str(phonemes);
                 } else {
                     self.translate_word(text.as_bytes(), ix, &mut result);
@@ -621,7 +630,17 @@ impl TextToPhoneme {
             let mut match_len = 0;
             for rule in &self.alpha_rules[(c - b'a') as usize] {
                 if rule.matches(text, ix) {
-                    //println!("matched {rule:?}");
+                    if self.trace {
+                        let word = String::from_utf8_lossy(text).trim().to_string();
+                        eprintln!(
+                            "  {word:<16} {:>2}  \"{}[{}]{}={}\"",
+                            ix - 1,
+                            rule.pre,
+                            rule.body,
+                            rule.post,
+                            rule.output
+                        );
+                    }
                     result.push_str(rule.output);
                     match_len = rule.body.len();
                     break;
@@ -1139,6 +1158,20 @@ fn inflection_ipa(stem: &str, suffix: &str) -> String {
 impl TextToPhoneme {
     /// Dictionary lookup, stripping affixes to find a stem.
     fn lookup(&self, word: &str) -> Option<String> {
+        let r = self.lookup_inner(word);
+        if self.trace
+            && let Some(p) = &r
+        {
+            if self.dict.contains_key(word) {
+                eprintln!("{word}: dictionary {p}");
+            } else {
+                eprintln!("{word}: via affixes {p}");
+            }
+        }
+        r
+    }
+
+    fn lookup_inner(&self, word: &str) -> Option<String> {
         if let Some(p) = self.dict.get(word) {
             return Some(p.to_string());
         }
@@ -1219,11 +1252,16 @@ impl TextToPhoneme {
                 } else {
                     stem
                 };
-                eprintln!("translating {stem}{context}");
+                if self.trace {
+                    eprintln!("{word}: rules on stem \"{stem}{context}\" + -{suf}");
+                }
                 let x = self.translate(&format!(" {stem}{context} "));
                 let ipa = if suf == "ed" { inflection_ipa(&x, suf) } else { "ɪŋ".into() };
                 return format!("{x}{ipa}");
             }
+        }
+        if self.trace {
+            eprintln!("{word}: rules");
         }
         self.translate(&format!(" {word} "))
     }

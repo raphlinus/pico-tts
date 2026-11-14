@@ -85,6 +85,9 @@ struct TextCmd {
     /// Print the ASCII phoneme format (word markers, stress, boundaries)
     #[arg(long)]
     ascii: bool,
+    /// Print dictionary hits, affix splits and each rule as it fires
+    #[arg(long)]
+    trace: bool,
     text: String,
 }
 
@@ -343,7 +346,8 @@ fn main_say(args: SayCmd) {
 }
 
 fn main_text(args: TextCmd) {
-    let ttp = crate::text_to_phoneme::TextToPhoneme::new();
+    let mut ttp = crate::text_to_phoneme::TextToPhoneme::new();
+    ttp.trace = args.trace;
     if args.file {
         let file = std::fs::File::open(args.text).unwrap();
         let reader = io::BufReader::new(file);

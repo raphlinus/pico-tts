@@ -125,6 +125,9 @@ struct PhonetCmd {
     /// Velar F2 locus rule in C.9.1
     #[arg(long, value_enum, default_value_t)]
     velar_locus: phonet::VelarLocus,
+    /// Formant transition times as a percentage of the book's
+    #[arg(long, default_value_t = 100.0)]
+    articulation: f32,
     /// Disable smoothing between segments (all transitions DISCON)
     #[arg(long)]
     no_smooth: bool,
@@ -473,6 +476,7 @@ fn main_phonet(args: PhonetCmd) {
             amp_else: args.amp_else,
             dip_units: args.dip_units,
             velar_locus: args.velar_locus,
+            articulation: args.articulation,
             voicing: args.voicing,
             nasal_zero: !args.no_nasal_zero,
             smooth: !args.no_smooth,

@@ -180,6 +180,9 @@ pub struct Options {
     pub amp_else: AmpElse,
     pub dip_units: DipUnits,
     pub velar_locus: VelarLocus,
+    /// Formant transition times as a percentage of the book's (the
+    /// narrator's "articulation" setting).
+    pub articulation: f32,
     pub voicing: Voicing,
     /// Raise the nasal zero to 450 Hz in nasals (C.4, C.8.4). Otherwise it
     /// stays at 250 Hz, cancelling the nasal pole.
@@ -1140,6 +1143,14 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
             target[p + 1] = target[p + 1].max(target[p] + 200.);
         }
         let mut tcb = tcf;
+        // Articulation (from the narrator): scale the formant transition
+        // times. 100 is the book.
+        if opts.articulation != 100. {
+            for p in F1..=F3 {
+                tcf[p] *= opts.articulation / 100.;
+                tcb[p] *= opts.articulation / 100.;
+            }
+        }
         // Glottal segments (SIL included) have no articulatory targets.
         if mods && prev.is(Flags::GLOTTAL) {
             oldval[A2..=B3].copy_from_slice(&target[A2..=B3]);

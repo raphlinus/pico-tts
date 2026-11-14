@@ -46,6 +46,8 @@ struct Word {
     start: usize,
     end: usize,
     boundary: Option<Boundary>,
+    /// The word is emphasized (`!`, not part of table 8-1).
+    emph: bool,
 }
 
 /// A segment with its computed duration and the factors that produced it,
@@ -70,9 +72,11 @@ pub fn prosod(text: &str) -> Result<Vec<Annotated>, String> {
                     start: segs.len(),
                     end: segs.len(),
                     boundary: None,
+                    emph: false,
                 });
             }
             "-" => syll_break = true,
+            "!" => words.last_mut().ok_or("! before any word")?.emph = true,
             "*" => {}
             ")N" | ")P" | ")R" => set_boundary(&mut words, Boundary::Phrase)?,
             "," | ")C" | "." | ")?" => set_boundary(&mut words, Boundary::Pause)?,
@@ -183,7 +187,10 @@ pub fn prosod(text: &str) -> Result<Vec<Annotated>, String> {
                 };
                 apply(p, "7", &mut prcnt);
             }
-            // Rule 8 (emphasis) is not implemented: there is no symbol for it.
+            // Rule 8: emphatic lengthening of the stressed vowel.
+            if is_syl && s.stress == 1 && word.emph {
+                apply(140., "8", &mut prcnt);
+            }
             // Rule 9: postvocalic context of vowels.
             if is_syl {
                 let p = postvocalic(&segs, i, word.end);

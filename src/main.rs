@@ -13,6 +13,7 @@ mod lpc;
 mod phonemes;
 mod phones;
 mod phonet;
+mod ascii;
 mod prosod;
 mod sequence;
 mod synth;
@@ -93,6 +94,9 @@ struct KlattCmd {
 struct PhonetCmd {
     out_file: String,
     params: String,
+    /// The input is ASCII phonemes (DECtalk one-character symbols)
+    #[arg(long)]
+    ascii: bool,
     /// Mapping of the av/avc table columns to AV/AVS
     #[arg(long, value_enum, default_value_t)]
     voicing: phonet::Voicing,
@@ -363,7 +367,17 @@ fn main_phonet(args: PhonetCmd) {
         sample_format: hound::SampleFormat::Int,
     };
     // The input is either a file of timed segments or a list of phones.
-    let text = std::fs::read_to_string(&args.params).unwrap_or_else(|_| args.params.clone());
+    let mut text = std::fs::read_to_string(&args.params).unwrap_or_else(|_| args.params.clone());
+    if args.ascii {
+        text = match ascii::ascii_to_phono2(&text) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        };
+        eprintln!("{text}");
+    }
     // PHONO2 input (with C:/F: word markers) gets durations from the
     // chapter 9 rules; otherwise the input gives them directly.
     let segs = if text.split_whitespace().any(|t| t == "C:" || t == "F:") {

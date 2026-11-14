@@ -469,7 +469,6 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("honor", "'^nR"),
     ("horizon", "hcr'Azxn"),
     ("hostile", "h'astxl"),
-    ("hundred", "h^ndrEd"),
     ("i", "A"),
     ("ideal", "Ad'il"),
     ("incline", "Inkl'An"),

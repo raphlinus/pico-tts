@@ -67,6 +67,19 @@ pub enum Rule {
     /// C.7.1: diphthong transition smoothing (table C-5, figure C-2).
     /// Otherwise diphthongs glide linearly over the whole segment.
     Diphthong,
+    /// C.8.1: obstruent target adjustments (devoicing, alveolar plosive
+    /// burst spectra, no voicebar after an obstruent).
+    Obstruent,
+    /// C.8.3.1: plosive burst at the end of the closure (table C-7).
+    Burst,
+    /// C.6.1: aspiration of a voiceless obstruent intrudes on the following
+    /// sonorant.
+    Aspiration,
+    /// C.6.1, as printed: the aspiration start moves later by Burdur - 5
+    /// after a plosive. By default it moves earlier, into the burst, as the
+    /// comment ("aspiration starts during plosive burst") and the narrator
+    /// code say. Off by default.
+    AspBurstLiteral,
 }
 
 /// How to read the final ELSE rule of C.5.
@@ -123,7 +136,7 @@ pub struct Options {
 
 /// Rules that are off unless enabled, where the literal reading of the book
 /// is doubtful.
-const DEFAULT_OFF: &[Rule] = &[Rule::PreaspSil];
+const DEFAULT_OFF: &[Rule] = &[Rule::PreaspSil, Rule::AspBurstLiteral];
 
 impl Options {
     fn on(&self, rule: Rule) -> bool {
@@ -137,6 +150,22 @@ impl Options {
 
 /// C.4
 const ASPAMP: f32 = 51.;
+/// C.4: default burst amplitude.
+const BURAMP: f32 = 57.;
+
+/// Table C-7: default plosive burst duration.
+fn burdur(phone: Phone) -> Option<u32> {
+    use Phone::*;
+    Some(match phone {
+        Bb | Pp => 5,
+        Ch | Tq | Tt => 15,
+        Dd | Dx | Jj => 10,
+        Gg | Gp => 20,
+        Kk | Kp => 25,
+        Mm | Ng | Nn => 0,
+        _ => return None,
+    })
+}
 
 /// Table C-5: diphthong transition parameters (Tcdiph, Tdmid).
 fn diphthong_params(phone: Phone) -> Option<(f32, f32)> {
@@ -199,7 +228,6 @@ pub struct Segment {
     /// F0 targets as (position within the segment from 0 to 1, Hz). F0 is
     /// interpolated linearly between the targets of all segments.
     pub f0: Vec<(f32, f32)>,
-    #[allow(unused, reason = "will be used in phonet rules")]
     pub stressed: bool,
 }
 
@@ -423,6 +451,8 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
 
     let mut start = 0;
     let mut prev_start = 0;
+    // Burst duration of the previous segment, if it had a burst.
+    let mut prev_burdur: Option<u32> = None;
     for (i, seg) in segs.iter().enumerate() {
         let phone = seg.phone;
         let prev = if i > 0 { segs[i - 1].phone } else { Phone::Sil };
@@ -513,6 +543,64 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
                 trantype[F1..=B3].fill(Trantype::Setsmo);
             }
         }
+        // C.8.1 fricatives and plosives
+        let next_is = |f: Flags| next.is_some_and(|n| n.is(f));
+        if opts.on(Rule::Obstruent) && phone.is(Flags::PLOSIVE | Flags::FRICATIVE) {
+            // Devoice unless a vowel follows.
+            if phone.is(Flags::VOICED) && !next_is(Flags::VOWEL) {
+                target[AVC] = (target[AVC] - 30.).max(0.);
+            }
+            if phone.is(Flags::PALATAL) {
+                target[F4] -= 150.;
+            }
+            if phone.is(Flags::ALVEOLAR) && phone.is(Flags::PLOSIVE) && !next_is(Flags::ALVEOLAR) {
+                let a: [f32; 5] = if next_is(Flags::RETRO) {
+                    [0., 67., 60., 65., 65.]
+                } else {
+                    [0., 52., 60., 70., 73.]
+                };
+                target[A2..A2 + 5].copy_from_slice(&a);
+            }
+            // No voicebar in a voiced plosive after an obstruent.
+            if phone.is(Flags::VOICED)
+                && phone.is(Flags::PLOSIVE)
+                && (!prev.is(Flags::VOICED) || !prev.is(Flags::SONORANT))
+            {
+                target[AVC] = 0.;
+            }
+        }
+        // C.8.3.1: insert a burst at the expense of the closure.
+        let burst = if opts.on(Rule::Burst)
+            && phone.is(Flags::PLOSIVE)
+            && phone != Phone::Qq
+            && next.is_some_and(|n| !n.is(Flags::STOP) && n != Phone::Sil)
+        {
+            let mut bd = burdur(phone).unwrap_or(0);
+            if phone == Phone::Tt && next_is(Flags::RETRO) {
+                bd += 10;
+            }
+            bd = bd.min(end - cumdur[AF]);
+            if bd == 0 {
+                bd = 5;
+            }
+            let mut amp = BURAMP;
+            if phone.is(Flags::VELAR) && !next_is(Flags::VOWEL) {
+                amp -= 5.;
+            }
+            if !phone.is(Flags::VOICED) {
+                amp += 6.;
+            }
+            if !seg.stressed {
+                amp -= if prev.is(Flags::NASAL) { 6. } else { 3. };
+            }
+            if next == Some(Phone::Axp) || next_is(Flags::FRICATIVE) {
+                amp -= 3.;
+            }
+            Some((bd, amp))
+        } else {
+            None
+        };
+
         if !opts.smooth {
             trantype = [Trantype::Discon; N_PAR];
         }
@@ -527,6 +615,76 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
             tracks.hold(ASP, ta, aspaml);
             cumdur[ASP] = ta;
             mintime[ASP] = ta;
+        }
+
+        // C.6.1: aspiration of a preceding voiceless obstruent intrudes on
+        // the sonorant.
+        if opts.on(Rule::Aspiration)
+            && phone.is(Flags::SONORANT)
+            && !prev.is(Flags::VOICED)
+            && !matches!(prev, Phone::Qq | Phone::Tq | Phone::Sil | Phone::Hh)
+        {
+            let prev_stressed = i > 0 && segs[i - 1].stressed;
+            let mut aspdur: i32 = 40;
+            let mut aml = ASPAMP;
+            if !prev_stressed {
+                aspdur = 20;
+                aml -= 3.;
+            }
+            if !phone.is(Flags::VOWEL) {
+                aspdur = if !prev.is(Flags::LABIAL) && !phone.is(Flags::LATERAL) {
+                    55
+                } else {
+                    50
+                };
+            }
+            if i >= 2 && segs[i - 2].phone.is(Flags::VOICED) && !seg.stressed {
+                aspdur -= 10;
+            }
+            if phone == Phone::Axp {
+                aspdur = 70;
+            }
+            if prev.is(Flags::PLOSIVE)
+                && let Some(bd) = prev_burdur
+            {
+                // Aspiration starts during the burst.
+                let shift = bd as i32 - 5;
+                for p in [ASP, AV, AVC, B1] {
+                    cumdur[p] = if opts.on(Rule::AspBurstLiteral) {
+                        (cumdur[p] as i32 + shift) as u32
+                    } else {
+                        (cumdur[p] as i32 - shift) as u32
+                    };
+                }
+                aspdur += shift;
+            }
+            if prev.is(Flags::FRICATIVE) {
+                aspdur = if phone.is(Flags::VOWEL) {
+                    10
+                } else {
+                    (end.saturating_sub(cumdur[ASP]) / 2) as i32
+                };
+            }
+            aspdur = aspdur
+                .min(end.saturating_sub(cumdur[ASP]) as i32)
+                .min(end.saturating_sub(cumdur[AV]) as i32)
+                .max(0);
+            if prev.is(Flags::ALVEOLAR) && phone.is(Flags::RETRO) {
+                aml += 9.;
+            }
+            if aspdur > 0 {
+                let aspdur = aspdur as u32;
+                let c0 = cumdur[ASP];
+                if prev.is(Flags::FRICATIVE) {
+                    let t0 = c0.saturating_sub(30);
+                    tracks.line(ASP, t0, tracks.at(ASP, t0), c0, aml);
+                }
+                for (p, v) in [(ASP, aml), (AV, 0.), (AVC, 0.), (B1, 150.)] {
+                    tracks.hold(p, cumdur[p], v);
+                    cumdur[p] += aspdur;
+                    mintime[p] = cumdur[p];
+                }
+            }
         }
 
         let mut oldval: Pars = std::array::from_fn(|p| tracks.at(p, cumdur[p]));
@@ -592,6 +750,17 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
         // Draw all parameter tracks (figure 11-6).
         for p in 0..N_PAR {
             let t1 = cumdur[p];
+            if p == AF
+                && let Some((bd, amp)) = burst
+            {
+                // Lower af by 20 dB at Cumdur and smooth backward over
+                // 30 ms; af is zero through the closure, then the burst.
+                let t0 = t1.saturating_sub(30).max(mintime[AF]);
+                tracks.line(AF, t0, tracks.at(AF, t0), t1, (oldval[AF] - 20.).max(0.));
+                tracks.hold(AF, t1, 0.);
+                tracks.hold(AF, end - bd, amp);
+                continue;
+            }
             if matches!(trantype[p], Trantype::Setsmo | Trantype::Smodis) {
                 let tb = t1.saturating_sub(tcb[p] as u32).max(mintime[p]);
                 tracks.line(p, tb, tracks.at(p, tb), t1, bvalb[p]);
@@ -643,6 +812,7 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
             let end_val = tracks.at(p, end);
             tracks.hold(p, end.min(total), end_val);
         }
+        prev_burdur = burst.map(|(bd, _)| bd);
         prev_start = start;
         start = end;
     }

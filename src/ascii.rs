@@ -126,6 +126,8 @@ fn convert_word(word: &str) -> Result<Vec<String>, String> {
         };
         let name = match c {
             'R' => match prev_phone(i) {
+                // A syllable break before R makes it syllabic (earli-er).
+                _ if matches!(i.checked_sub(1).map(|p| &els[p]), Some(El::Mark("-"))) => "ER",
                 Some(p) if is_vowel(p) && p != 'R' => {
                     if vowel_next(i) {
                         "RR"

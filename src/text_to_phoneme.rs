@@ -196,6 +196,7 @@ const RAW_RULES: &[&str] = &[
     "[h]",
     " [in]=ɪn",
     "[in]d=aɪn",
+    "#:[ier]=iɚ", // added: earlier, happier (not pier)
     "[ier]=iɹ",
     "#:r[ied] =id",
     "[ied] =aɪd",
@@ -1193,7 +1194,14 @@ impl TextToPhoneme {
                 Tok::Word(w) => {
                     out.push(if w.function { "F:" } else { "C:" }.into());
                     let mut s = String::new();
+                    let mut prev_vowel = false;
                     for seg in w.segs {
+                        // Syllabic R after a vowel (earlier, happier) gets a
+                        // syllable break so it isn't read as r-coloring.
+                        if seg.c == 'R' && seg.vowel && prev_vowel {
+                            s.push('-');
+                        }
+                        prev_vowel = seg.vowel;
                         match seg.stress {
                             1 => s.push('\''),
                             2 => s.push('"'),

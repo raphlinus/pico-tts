@@ -135,7 +135,9 @@ fn convert_word(word: &str) -> Result<Vec<String>, String> {
                         "RX"
                     }
                 }
-                _ if vowel_next(i) && s == 0 => "RR",
+                // Unstressed R before a weak vowel loses its syllable
+                // (every, memory), but not before a full vowel (operate).
+                _ if vowel_next(i) && s == 0 && next_phone(i).is_some_and(|c| "iIx".contains(c)) => "RR",
                 _ => "ER",
             },
             'I' | 'E' | 'a' | 'c' | 'U' if phone_at(i + 1) == Some('R') && !vowel_next(i + 1) => {

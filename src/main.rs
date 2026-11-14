@@ -13,6 +13,7 @@ mod lpc;
 mod phonemes;
 mod phones;
 mod phonet;
+mod prosod;
 mod sequence;
 mod synth;
 mod text_to_phoneme;
@@ -363,11 +364,33 @@ fn main_phonet(args: PhonetCmd) {
     };
     // The input is either a file of timed segments or a list of phones.
     let text = std::fs::read_to_string(&args.params).unwrap_or_else(|_| args.params.clone());
-    let segs = match phonet::parse_segments(&text) {
-        Ok(segs) => segs,
-        Err(e) => {
-            eprintln!("{e}");
-            std::process::exit(1);
+    // PHONO2 input (with C:/F: word markers) gets durations from the
+    // chapter 9 rules; otherwise the input gives them directly.
+    let segs = if text.split_whitespace().any(|t| t == "C:" || t == "F:") {
+        match prosod::prosod(&text) {
+            Ok(ann) => {
+                for a in &ann {
+                    eprintln!(
+                        "{:>4} {:>4} ms  {}",
+                        format!("{:?}", a.seg.phone).to_uppercase(),
+                        a.seg.dur,
+                        a.note
+                    );
+                }
+                ann.into_iter().map(|a| a.seg).collect()
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        match phonet::parse_segments(&text) {
+            Ok(segs) => segs,
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(1);
+            }
         }
     };
     let mut writer = hound::WavWriter::create(args.out_file, spec).unwrap();

@@ -111,7 +111,6 @@ pub struct ParamTargetGlide {
 
 #[derive(Clone, Copy)]
 pub struct PhoneDuration {
-    #[expect(unused, reason = "will be used in phonet rules")]
     pub min_duration: u16,
     pub inherent_duration: u16,
 }

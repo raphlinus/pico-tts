@@ -119,6 +119,10 @@ struct PhonetCmd {
     /// Disable smoothing between segments (all transitions DISCON)
     #[arg(long)]
     no_smooth: bool,
+    /// Smooth F0 with Fujisaki's accent filter, with this natural frequency
+    /// in 1/s (Fujisaki's beta is typically about 20)
+    #[arg(long)]
+    f0_beta: Option<f32>,
     /// Output gain in dB
     #[arg(long, default_value = "0")]
     gain: f32,
@@ -431,6 +435,7 @@ fn main_phonet(args: PhonetCmd) {
             voicing: args.voicing,
             nasal_zero: !args.no_nasal_zero,
             smooth: !args.no_smooth,
+            f0_beta: args.f0_beta,
         },
     ) {
         klatt.set(&klatt_params);

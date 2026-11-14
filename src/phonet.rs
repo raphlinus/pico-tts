@@ -114,6 +114,11 @@ pub struct Options {
     /// Smooth transitions between segments (figure 11-6). Otherwise every
     /// transition is DISCON.
     pub smooth: bool,
+    /// Smooth log F0 with Fujisaki's accent-command filter (a critically
+    /// damped second-order lowpass, natural frequency in 1/s), run forward
+    /// and backward so it adds no delay. Otherwise F0 is piecewise linear
+    /// between targets, as in MITalk.
+    pub f0_beta: Option<f32>,
 }
 
 /// Rules that are off unless enabled, where the literal reading of the book
@@ -672,7 +677,32 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
         frames.push(out.clone());
         t += FRAME_TIME;
     }
+    if let Some(beta) = opts.f0_beta {
+        let mut lf: Vec<f32> = frames.iter().map(|f| f.f0.ln()).collect();
+        smooth_critically_damped(&mut lf, beta * FRAME_TIME as f32 / 1000.);
+        lf.reverse();
+        smooth_critically_damped(&mut lf, beta * FRAME_TIME as f32 / 1000.);
+        lf.reverse();
+        for (f, l) in frames.iter_mut().zip(lf) {
+            f.f0 = l.exp();
+        }
+    }
     frames
+}
+
+/// Two cascaded one-pole lowpasses with the same pole: the impulse response
+/// is proportional to `t exp(-beta t)`, Fujisaki's accent response.
+/// `beta_dt` is beta times the sample period. The state starts at the first
+/// value, so a constant input passes unchanged.
+fn smooth_critically_damped(x: &mut [f32], beta_dt: f32) {
+    let Some(&x0) = x.first() else { return };
+    let a = (-beta_dt).exp();
+    let (mut y1, mut y2) = (x0, x0);
+    for v in x.iter_mut() {
+        y1 = a * y1 + (1. - a) * *v;
+        y2 = a * y2 + (1. - a) * y1;
+        *v = y2;
+    }
 }
 
 fn interp_f0(points: &[(f32, f32)], t: f32) -> f32 {

@@ -136,6 +136,13 @@ struct PhonetCmd {
     /// are interpolated linearly from the previous frame in this many steps.
     #[arg(long, default_value_t = 5)]
     interp: usize,
+    /// Gaussian glottal pulses of this width (samples, std dev) with
+    /// randomized width and a flattening EQ (0 = impulses).
+    #[arg(long, default_value_t = 0.0)]
+    pulse_sigma: f32,
+    /// Relative spread of the per-pulse Gaussian width.
+    #[arg(long, default_value_t = 0.5)]
+    pulse_spread: f32,
     /// Smooth F0 with Fujisaki's accent filter, with this natural frequency
     /// in 1/s (Fujisaki's beta is typically about 20)
     #[arg(long)]
@@ -468,6 +475,7 @@ fn main_phonet(args: PhonetCmd) {
     };
     let mut writer = hound::WavWriter::create(args.out_file, spec).unwrap();
     let mut klatt = crate::klatt::Klatt::default();
+    klatt.set_pulse_shape(args.pulse_sigma, args.pulse_spread);
     let samples_per_frame = (spec.sample_rate * phonet::FRAME_TIME / 1000) as usize;
     let gain = 16384. * 10f32.powf(args.gain / 20.);
     let mut peak = 0f32;

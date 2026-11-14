@@ -58,6 +58,120 @@ pub struct Klatt {
     aaspir: f32,
     afric: f32,
     abpar: f32,
+    /// Gaussian glottal pulses of random width (see `PulseShaper`).
+    pulses: Option<PulseShaper>,
+}
+
+/// Gaussian glottal pulses of random width, equalized to a flat average
+/// spectrum, as found for LSP copy synthesis (pshf branch): each pulse's
+/// high frequencies differ slightly, which reduces the buzz of a perfectly
+/// periodic impulse train. The shaped excitation is `PULSE_DELAY` samples
+/// late, and the noise sources are delayed to match.
+struct PulseShaper {
+    sigma: f32,
+    spread: f32,
+    eq: Vec<f32>,
+    ring: Vec<f32>,
+    pos: usize,
+    noise_delay: [f32; PULSE_DELAY],
+    noise_pos: usize,
+    seed: u32,
+    /// Previous shaped output, for the first difference.
+    last: f32,
+    s_delay: [f32; PULSE_DELAY],
+}
+
+const EQ_HALF: usize = 31;
+const PULSE_DELAY: usize = 48;
+
+impl PulseShaper {
+    fn new(sigma: f32, spread: f32) -> Self {
+        use core::f32::consts::PI;
+        // Average power spectrum of the pulse family, then a zero-phase
+        // FIR approximating its inverse square root.
+        const N: usize = 1024;
+        let n_bins = N / 2 + 1;
+        let widths: Vec<f32> = (0..=200)
+            .map(|i| sigma * (1.0 + spread * (i as f32 / 100.0 - 1.0)))
+            .collect();
+        let mag: Vec<f32> = (0..n_bins)
+            .map(|k| {
+                let w = 2. * PI * k as f32 / N as f32;
+                let p = widths.iter().map(|s| (-(w * s).powi(2)).exp()).sum::<f32>()
+                    / widths.len() as f32;
+                1.0 / p.sqrt()
+            })
+            .collect();
+        let eq = (0..=2 * EQ_HALF)
+            .map(|i| {
+                let t = i as f32 - EQ_HALF as f32;
+                let h: f32 = (0..n_bins)
+                    .map(|k| {
+                        let c = if k == 0 || k == N / 2 { 1.0 } else { 2.0 };
+                        c * mag[k] * (2. * PI * k as f32 * t / N as f32).cos()
+                    })
+                    .sum::<f32>()
+                    / N as f32;
+                h * (0.5 + 0.5 * (PI * t / (EQ_HALF as f32 + 1.0)).cos())
+            })
+            .collect();
+        Self {
+            sigma,
+            spread,
+            eq,
+            ring: vec![0.0; 256],
+            pos: 0,
+            noise_delay: [0.0; PULSE_DELAY],
+            noise_pos: 0,
+            seed: 0x2545_f491,
+            last: 0.0,
+            s_delay: [0.0; PULSE_DELAY],
+        }
+    }
+
+    fn uniform(&mut self) -> f32 {
+        self.seed ^= self.seed << 13;
+        self.seed ^= self.seed >> 17;
+        self.seed ^= self.seed << 5;
+        (self.seed >> 8) as f32 / (1u32 << 24) as f32
+    }
+
+    /// Feed one sample of the impulse train and return the shaped
+    /// excitation, `PULSE_DELAY` samples late.
+    fn process(&mut self, impulse: f32) -> f32 {
+        if impulse != 0.0 {
+            let sd = self.sigma * (1.0 + self.spread * (2.0 * self.uniform() - 1.0));
+            let n = (4.0 * sd).ceil() as isize;
+            let norm: f32 = (-n..=n).map(|j| (-0.5 * (j as f32 / sd).powi(2)).exp()).sum();
+            let len = self.ring.len();
+            for j in -n..=n {
+                let g = (-0.5 * (j as f32 / sd).powi(2)).exp() / norm;
+                for (b, ev) in self.eq.iter().enumerate() {
+                    let off = PULSE_DELAY as isize + j + (b as isize - EQ_HALF as isize);
+                    let ix = (self.pos + off as usize) % len;
+                    self.ring[ix] += impulse * g * ev;
+                }
+            }
+        }
+        let y = self.ring[self.pos];
+        self.ring[self.pos] = 0.0;
+        self.pos = (self.pos + 1) % self.ring.len();
+        y
+    }
+
+    fn delay(&mut self, x: f32) -> f32 {
+        let i = self.noise_pos;
+        self.noise_pos = (self.noise_pos + 1) % PULSE_DELAY;
+        core::mem::replace(&mut self.noise_delay[i], x)
+    }
+}
+
+impl Klatt {
+    /// Use Gaussian glottal pulses of width `sigma` samples (std dev),
+    /// randomized by `spread`, instead of impulses. 0 disables.
+    pub fn set_pulse_shape(&mut self, sigma: f32, spread: f32) {
+        self.pulses = (sigma > 0.0).then(|| PulseShaper::new(sigma, spread));
+    }
 }
 
 pub struct Noise {
@@ -222,6 +336,17 @@ impl Klatt {
                 input_s = -self.pulse_amp.1;
             }
         }
+        if let Some(ps) = &mut self.pulses {
+            // Shape the impulse, then take the first difference, so that
+            // both halves of the doublet share one pulse width.
+            let imp = if self.pulse_phase == 0 { self.pulse_amp.0 } else { 0.0 };
+            let y = ps.process(imp);
+            input = y - ps.last;
+            ps.last = y;
+            // Keep the AVS branch aligned with the delayed AV pulses.
+            let i = ps.noise_pos;
+            input_s = core::mem::replace(&mut ps.s_delay[i], input_s);
+        }
         let ygp = self.rgp.process(input);
         let ygz = self.rgz.process(ygp);
         // Quasi-sinusoidal voicing: impulses low-passed by RGP and RGS
@@ -229,6 +354,9 @@ impl Klatt {
         let mut noise = self.noise.next_pseudogauss();
         if self.pulse_phase * 2 > self.pulse_period {
             noise *= 0.5;
+        }
+        if let Some(ps) = &mut self.pulses {
+            noise = ps.delay(noise);
         }
         self.pulse_phase += 1;
         // TODO: linear smoothing of aspiration amplitude

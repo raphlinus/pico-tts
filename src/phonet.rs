@@ -155,6 +155,10 @@ pub enum VelarLocus {
     NoAa,
     /// The narrator: F2 = T2 + T1 - 300, never KP's targets.
     Narrator,
+    /// As printed, but only for a velar before the vowel. Going from a
+    /// vowel into a velar, the C.9.1 F2 and F3 rules are skipped, so the
+    /// boundary uses the default Bper and the velar's table target.
+    CvOnly,
 }
 
 /// Options controlling rendering, mostly for ablation.
@@ -995,14 +999,22 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
                 if last.is(Flags::ALVEOLAR) {
                     ov[F3] = if cur.is(Flags::RETRO) { 2300. } else { 2620. };
                 }
-                if last.is(Flags::VELAR) {
+                let skip_velar =
+                    swap && last.is(Flags::VELAR) && opts.velar_locus == VelarLocus::CvOnly;
+                if skip_velar {
+                    bp[F2] = None;
+                    bp[F3] = None;
+                }
+                if last.is(Flags::VELAR) && !skip_velar {
                     // The velar F2 locus follows the vowel: F1 for the
                     // lip-rounding and F2 for the fronting part.
                     let k = if opts.velar_locus == VelarLocus::Narrator { 1. } else { 2. };
                     ov[F2] = tg[F2] + (tg[F1] - 300.) * k;
                     ov[F3] = ov[F2] + if cur.is(Flags::LABIAL) { 800. } else { 400. };
                     let kp = match opts.velar_locus {
-                        VelarLocus::Book => cur.is(Flags::FRONT) || cur == Phone::Aa,
+                        VelarLocus::Book | VelarLocus::CvOnly => {
+                            cur.is(Flags::FRONT) || cur == Phone::Aa
+                        }
                         VelarLocus::NoAa => cur.is(Flags::FRONT),
                         VelarLocus::Narrator => false,
                     };

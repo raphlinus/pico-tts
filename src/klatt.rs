@@ -5,13 +5,16 @@
 
 const N_FORMANTS: usize = 5;
 
-/// Calibration of the voicing sources relative to the noise sources, in dB.
+/// Calibration of the cascade-branch sources (voicing and aspiration)
+/// relative to the parallel-branch frication, in dB.
 ///
 /// With the NDBSCA scale factors alone, a vowel at AV=60 comes out about
 /// 40 dB weaker than /s/ at AF=60, which is far from natural balance. The
 /// MITalk tables assume Klatt's own calibration, so this compensates. It
 /// was previously applied as `av += 40` in the callers. The true source of
-/// the discrepancy is not yet known (the RGP gain is one candidate).
+/// the discrepancy is not yet known. Aspiration, which shares the cascade
+/// branch but not RGP, was about as far off (about 60 dB below the vowel at
+/// AH=51), so the gap is probably in the cascade branch rather than RGP.
 const VOICING_CAL_DB: f32 = 40.0;
 
 #[derive(Default)]
@@ -263,7 +266,9 @@ impl Klatt {
         self.rgs.set(0.0, params.bgs, radians_per_sample);
         self.rnp.set(params.fnp, params.bnp, radians_per_sample);
         self.rnz.set(params.fnz, params.bnz, radians_per_sample);
-        self.aaspir = db_to_linear(params.ah, 102.0);
+        // Aspiration enters the cascade branch like voicing, and needs the
+        // same calibration to be audible at the levels MITalk uses.
+        self.aaspir = db_to_linear(params.ah, 102.0 - VOICING_CAL_DB);
         self.afric = db_to_linear(params.af, 72.0);
         self.apar[0] = db_to_linear(params.a2, 65.0);
         self.apar[1] = db_to_linear(params.a3, 73.0);

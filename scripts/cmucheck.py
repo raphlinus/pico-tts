@@ -143,11 +143,14 @@ def vowel_index(seq, i):
 
 
 def run(binary, words):
-    r = subprocess.run([binary, 'text', '--ascii', '. '.join(words) + '.'],
+    # Commas, not periods, between words, so that "jan." or "inc." aren't
+    # read as abbreviations.
+    r = subprocess.run([binary, 'text', '--ascii', ', '.join(words)],
                        capture_output=True, text=True)
     if r.returncode:
         return None
-    parts = [p.strip() for p in r.stdout.strip().split(' .') if p.strip()]
+    out = r.stdout.strip().removesuffix(' .')
+    parts = [p.strip() for p in out.split(' ,') if p.strip()]
     if len(parts) != len(words):
         return None
     return [re.sub(r'^[FC]: ', '', p) for p in parts]

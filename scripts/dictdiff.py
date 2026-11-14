@@ -18,12 +18,14 @@ words = sorted({w.strip().lower() for w in open(src) if w.strip().isalpha()})
 
 
 def run(b, ws):
-    # Words are separated by periods so that no cross-word rule fires.
-    r = subprocess.run([b, 'text', '--ascii', '. '.join(ws) + '.'],
+    # Words are separated by commas so that no cross-word rule fires (and
+    # not periods, which would make "mr." an abbreviation).
+    r = subprocess.run([b, 'text', '--ascii', ', '.join(ws)],
                        capture_output=True, text=True)
     if r.returncode:
         return None
-    parts = [p.strip() for p in r.stdout.strip().split(' .') if p.strip()]
+    out = r.stdout.strip().removesuffix(' .')
+    parts = [p.strip() for p in out.split(' ,') if p.strip()]
     return parts if len(parts) == len(ws) else None
 
 

@@ -577,6 +577,9 @@ impl TextToPhoneme {
         for (word, phonemes) in DICTIONARY {
             dict.insert(*word, *phonemes);
         }
+        for (word, phonemes) in crate::normalize::WORDS {
+            dict.entry(*word).or_insert(*phonemes);
+        }
         TextToPhoneme {
             alpha_rules,
             dict,
@@ -1274,40 +1277,11 @@ impl TextToPhoneme {
     ///
     /// Stress comes from the dictionary when it has it; otherwise a content
     /// word is stressed on its first full (non-schwa) vowel. Function words
-    /// come from a fixed list. Commas, colons and semicolons become `,`;
-    /// question marks `?`; other sentence punctuation `.`.
+    /// come from a fixed list. The text is first normalized
+    /// ([`crate::normalize`]): numbers, acronyms and abbreviations become
+    /// words, and punctuation `,` (phrase break), `?` or `.`.
     pub fn to_ascii(&self, text: &str) -> Result<String, String> {
-        // Tokenize into words and punctuation.
-        let mut tokens: Vec<String> = vec![];
-        let mut word = String::new();
-        for ch in text.chars().flat_map(char::to_lowercase) {
-            if ch.is_ascii_lowercase() {
-                word.push(ch);
-                continue;
-            }
-            if ch == '\'' || ch == '’' {
-                continue;
-            }
-            if !word.is_empty() {
-                tokens.push(std::mem::take(&mut word));
-            }
-            match ch {
-                ',' | ';' | ':' => tokens.push(",".into()),
-                '.' | '!' => tokens.push(".".into()),
-                '?' => tokens.push("?".into()),
-                _ => {}
-            }
-        }
-        if !word.is_empty() {
-            tokens.push(word);
-        }
-        if !tokens
-            .last()
-            .is_some_and(|t| matches!(t.as_str(), "." | "?"))
-        {
-            tokens.push(".".into());
-        }
-
+        use crate::normalize::{normalize, Token, LETTERS};
         // Words to segments.
         struct Word {
             function: bool,
@@ -1318,11 +1292,29 @@ impl TextToPhoneme {
             Punct(String),
         }
         let mut toks = vec![];
-        for t in tokens {
-            if !t.as_bytes()[0].is_ascii_lowercase() {
-                toks.push(Tok::Punct(t));
-                continue;
-            }
+        for t in normalize(text) {
+            let t = match t {
+                Token::Punct(p) => {
+                    toks.push(Tok::Punct(p.to_string()));
+                    continue;
+                }
+                Token::Spell(letters, plural) => {
+                    let n = letters.len();
+                    for (k, l) in letters.bytes().enumerate() {
+                        let mut name = LETTERS[(l - b'a') as usize].to_string();
+                        // Stress on the last letter: F B I.
+                        if k + 1 < n {
+                            name = name.replace('\'', "\"");
+                        } else if plural {
+                            name.push_str(if b"sxh".contains(&l) { "Iz" } else { "z" });
+                        }
+                        let segs = ascii_to_segs(&name)?;
+                        toks.push(Tok::Word(Word { function: false, segs }));
+                    }
+                    continue;
+                }
+                Token::Word(w) => w,
+            };
             let ipa = self.pronounce(&t);
             let mut segs = ascii_to_segs(&ipa).map_err(|e| format!("{e} (\"{t}\")"))?;
             let function = FUNCTION_WORDS.contains(&t.as_str());

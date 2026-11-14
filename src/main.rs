@@ -10,6 +10,7 @@ use crate::{
 
 mod klatt;
 mod lpc;
+mod normalize;
 mod phonemes;
 mod phones;
 mod phonet;

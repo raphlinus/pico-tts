@@ -123,7 +123,7 @@ pub enum Rule {
     FricOffset,
     /// Experimental (not in the book): no backward formant smoothing into a
     /// plosive, so the burst is shaped by the plosive's own formants rather
-    /// than the next segment's. Off by default.
+    /// than the next segment's (fixes "drove" heard as "grove").
     ReleaseHold,
 }
 
@@ -209,7 +209,6 @@ const DEFAULT_OFF: &[Rule] = &[
     Rule::VelarF2,
     Rule::DevoiceAv,
     Rule::FricOffset,
-    Rule::ReleaseHold,
 ];
 
 impl Options {

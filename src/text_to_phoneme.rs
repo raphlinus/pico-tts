@@ -1303,7 +1303,7 @@ impl TextToPhoneme {
                             // Not before syllabic n (didn't, button).
                             && !(in_word_next.is_some_and(|n| n.c == 'x')
                                 && segs.get(j + 2).is_some_and(|n| n.c == 'n')
-                                && !segs.get(j + 3).is_some_and(|n| n.vowel)) =>
+                                && !segs[j + 3..].iter().any(|n| n.vowel)) =>
                     {
                         segs[j].c = '&';
                     }

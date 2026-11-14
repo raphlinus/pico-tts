@@ -62,276 +62,265 @@ const ALPHA_FLAGS: [Flags; 26] = [
 ];
 
 // These rules were adapted closely from Elovitz et al. with some tweaks.
-// The output is a concise IPA, following the mapping in Table 1 with some
-// exceptions: the mapping for AA is ɑ rather than a, and WH is ʍ.
-//
-// The mappings for OW and UW are a bit controversial. Here I've followed
-// the table, which gives o and u respectively. In standard IPA, these would
-// generally be expanded to oʊ and uː. However, Geoff Lindsay suggests a
-// better expansion would be ow (or əw) and uw (or ʉw). Similarly, I map IY
-// to i, while standard IPA might call for iː, and Lindsay suggests ɪj.
-//
-// I also follow Lindsey's lead to map AW to aw rather than aʊ as in
-// standard IPA.
-//
-// I follow the standard by transcribing AY to aɪ, OY to ɔɪ and EY to ɛɪ.
-// Linsdey suggests ɑj, oj, and ɛj.
+// The output is in the one-character ASCII phoneme alphabet of
+// [`crate::ascii`] (DECtalk symbols), with `'` and `"` before a vowel for
+// primary and secondary stress. The dictionary uses the same notation.
 //
 // Also note: don't write "^:" as in the original paper, instead ":^", as
 // a consequence of greedy matching.
 const RAW_RULES: &[&str] = &[
-    "[a] =ə",
-    " [ar]o=əɹ",
-    "[ar]#=ɛɹ",
-    " ^[as]#=ɛɪs",
-    " [a]^o=ə", // added: about, above, around, another
-    " [a]^ai=ə", // added: again, available
-    "[a]wa=ə",
-    "[aw]=ɔ",
-    " :[any]=ɛni",
-    "[a]^+#=ɛɪ",
-    "#:[ally]=əli",
-    "^[al]m=ɑ", // added
-    " [al]#=əl",
-    "[again]=əgɛn",
-    "#:[ag]e=ɪdʒ",
-    "[a]+%=ɛɪ",
-    "[a]^+:#=æ",
-    " :[a]^+ =ɛɪ",
-    "[a]^%=ɛɪ",
-    " [arr]=əɹ",
-    "[arr]=æɹ",
-    " :[ar] =ɑɹ",
-    "[ar] =ɚ",
-    "[ar]=ɑɹ",
-    "[air]=ɛɹ",
-    "[ai]=ɛɪ",
-    "[ay]=ɛɪ",
-    "[au]=ɔ",
-    "#:[al]=əl",
+    "[a] =x",
+    " [ar]o=xr",
+    "[ar]#=Er",
+    " ^[as]#=es",
+    " [a]^o=x", // added: about, above, around, another
+    " [a]^ai=x", // added: again, available
+    "[a]wa=x",
+    "[aw]=c",
+    " :[any]=Eni",
+    "[a]^+#=e",
+    "#:[ally]=xli",
+    "^[al]m=a", // added
+    " [al]#=xl",
+    "[again]=xgEn",
+    "#:[ag]e=IJ",
+    "[a]+%=e",
+    "[a]^+:#=@",
+    " :[a]^+ =e",
+    "[a]^%=e",
+    " [arr]=xr",
+    "[arr]=@r",
+    " :[ar] =ar",
+    "[ar] =R",
+    "[ar]=ar",
+    "[air]=Er",
+    "[ai]=e",
+    "[ay]=e",
+    "[au]=c",
+    "#:[al]=xl",
     //"#:[als]=əlz", // subsumed by rule in s
-    "[alk]=ɔk",
-    "[al]^=ɔl",
-    " :[able]=ɛɪbəl",
-    "[able]=əbəl",
-    "[ang]+=ɛɪndʒ",
-    "[a]=æ",
-    " [be]^#=bɪ",
-    "[being]=biɪŋ",
-    " [both]=boθ",
-    " [bus]#=bɪz",
-    "[buil]=bɪl",
+    "[alk]=ck",
+    "[al]^=cl",
+    " :[able]=ebxl",
+    "[able]=xbxl",
+    "[ang]+=enJ",
+    "[a]=@",
+    " [be]^#=bI",
+    "[being]=biIG",
+    " [both]=boT",
+    " [bus]#=bIz",
+    "[buil]=bIl",
     "[b]=b",
-    "[crea]t=kɹiɛɪ1", // added
+    "[crea]t=kri'e", // added
     " [ch]^=k",
     "^e[ch]=k",
-    "[ch]=tʃ",
-    " s[ci]#=saɪ",
-    "[ci]a=ʃ",
-    "[ci]o=ʃ",
-    "[ci]en=ʃ",
+    "[ch]=C",
+    " s[ci]#=sA",
+    "[ci]a=S",
+    "[ci]o=S",
+    "[ci]en=S",
     "[c]+=s",
     "[ck]=k",
-    "[comfor]=kʌmfɚ", // added
-    "[com]%=kʌm",
+    "[comfor]=k^mfR", // added
+    "[com]%=k^m",
     "[c]=k",
-    "#:[ded] =dɪd",
+    "#:[ded] =dId",
     ".e[d] =d",
     "#:^e[d] =t",
-    " [de]^#=dɪ",
-    " [does]=dʌz",
-    " [doing]=duɪŋ",
-    " [dow]=daw",
-    "[du]a=dʒu",
+    " [de]^#=dI",
+    " [does]=d^z",
+    " [doing]=duIG",
+    " [dow]=dW",
+    "[du]a=Ju",
     "[d]=d",
     "#:[e] ",
     "' :^[e] ",
     " :[e] =i",
     "#[ed] =d",
     "#:[e]d ",
-    "[ev]er=ɛv",
-    "g[e]ner=ɛ",       // added
-    "^#:[ement]=mɛnt", // moved up and tweaked
+    "[ev]er=Ev",
+    "g[e]ner=E",       // added
+    "^#:[ement]=mEnt", // moved up and tweaked
     "[e]^%=i",
-    "[eri]#=iɹi",
-    "[eri]=ɛɹi",
-    "#:[er]#=ɚ",
-    "[er]#=ɛɹ",
-    "[er]=ɚ",
-    " [even]=ivɛn",
+    "[eri]#=iri",
+    "[eri]=Eri",
+    "#:[er]#=R",
+    "[er]#=Er",
+    "[er]=R",
+    " [even]=ivEn",
     "#:[e]w",
     "@[ew]=u",
-    "[ew]=ju",
+    "[ew]=yu",
     "[e]o=i",
-    "#:&[es] =ɪz",
-    "g[es] =ɪz", // added and perhaps controversial
+    "#:&[es] =Iz",
+    "g[es] =Iz", // added and perhaps controversial
     "#:[e]s ",
     "#:[ely] =li",
-    "[eful]=fʊl",
+    "[eful]=fUl",
     "[ee]=i",
-    "[earn]=ɚn",
-    "[ear]ch=ɚ", // added: search, research
-    " [ear]l=ɚ", // added: early, earl (not clearly)
-    "[ear]th=ɚ", // added: earth
-    " [ear]^=ɚ",
-    "[ead]=ɛd",
-    "#:[ea]=iə",
-    "[ea]su=ɛ",
-    "[ea]lth=ɛ", // added
+    "[earn]=Rn",
+    "[ear]ch=R", // added: search, research
+    " [ear]l=R", // added: early, earl (not clearly)
+    "[ear]th=R", // added: earth
+    " [ear]^=R",
+    "[ead]=Ed",
+    "#:[ea]=ix",
+    "[ea]su=E",
+    "[ea]lth=E", // added
     "[ea]=i",
-    "[eigh]=ɛɪ",
+    "[eigh]=e",
     "[ei]=i",
-    " [eye]=aɪ",
+    " [eye]=A",
     "[ey]=i",
-    "[eu]=ju",
-    "[e]=ɛ",
-    "[ful]=fʊl",
+    "[eu]=yu",
+    "[e]=E",
+    "[ful]=fUl",
     "[f]=f",
-    "[giv]=gɪv",
+    "[giv]=gIv",
     " [g]i^=g",
-    "[ge]t=gɛ",
-    "su[gges]=dʒɛs", // got rid of the g
+    "[ge]t=gE",
+    "su[gges]=JEs", // got rid of the g
     "[gg]=g",
     " b#[g]=g",
-    "[g]+=dʒ",
-    "[great]=gɹɛɪt",
+    "[g]+=J",
+    "[great]=gret",
     "#[gh]",
     "[g]=g",
-    " [hav]=hæv",
-    " [here]=hiɹ",
-    " [hour]=awɚ",
-    "[how]=haw",
+    " [hav]=h@v",
+    " [here]=hir",
+    " [hour]=WR",
+    "[how]=hW",
     "[h]#=h",
     "[h]",
-    " [in]=ɪn",
-    "[in]d=aɪn",
-    "#:[ier]=iɚ", // added: earlier, happier (not pier)
-    "[i]ty =ɪ", // added: city, -ity
-    "[ier]=iɹ",
+    " [in]=In",
+    "[in]d=An",
+    "#:[ier]=iR", // added: earlier, happier (not pier)
+    "[i]ty =I", // added: city, -ity
+    "[ier]=ir",
     "#:r[ied] =id",
-    "[ied] =aɪd",
-    "fr[ien]=ɛn", // added
-    "[ien]=iɛn",
-    "[ie]t=aɪɛ",
-    " :[i]%=aɪ",
+    "[ied] =Ad",
+    "fr[ien]=En", // added
+    "[ien]=iEn",
+    "[ie]t=AE",
+    " :[i]%=A",
     "[i]%=i",
     "[ie]=i",
-    "[i]^+:#=ɪ",
-    "[ir]#=aɪɹ",
-    "[iz]%=aɪz",
-    "[is]%=aɪz",
-    "[i]d%=aɪ",
-    "+^[i]^=ɪ",
-    "[i]t%=aɪ",
-    "#:^[i]^+=ɪ",
-    "[i]^+=aɪ",
-    "[ir]=ɚ",
-    "[igh]=aɪ",
-    "[ild]=aɪld",
-    "[ign] =aɪn",
-    "[ign]^=aɪn",
-    "[ign]%=aɪn",
+    "[i]^+:#=I",
+    "[ir]#=Ar",
+    "[iz]%=Az",
+    "[is]%=Az",
+    "[i]d%=A",
+    "+^[i]^=I",
+    "[i]t%=A",
+    "#:^[i]^+=I",
+    "[i]^+=A",
+    "[ir]=R",
+    "[igh]=A",
+    "[ild]=Ald",
+    "[ign] =An",
+    "[ign]^=An",
+    "[ign]%=An",
     "[ique]=ik",
-    "[i]=ɪ",
-    "[j]=dʒ",
+    "[i]=I",
+    "[j]=J",
     " [k]n",
     "[k]=k",
     "[lo]c#=lo",
     "l[l]",
-    "#:^[l]%=əl",
+    "#:^[l]%=xl",
     "[lead]=lid",
     "[l]=l",
     "[mov]=muv",
     "[m]=m",
-    "e[ng]+=ndʒ",
-    "[ng]e =ndʒ", // added: fringe, hinge, sponge
-    "[ng]es =ndʒ", // added: fringes
-    "[ng]r=ŋg",
-    "[ng]#=ŋg",
-    "[ngl]%=ŋgəl",
-    "[ng]=ŋ",
-    "[nk]=ŋk",
+    "e[ng]+=nJ",
+    "[ng]e =nJ", // added: fringe, hinge, sponge
+    "[ng]es =nJ", // added: fringes
+    "[ng]r=Gg",
+    "[ng]#=Gg",
+    "[ngl]%=Ggxl",
+    "[ng]=G",
+    "[nk]=Gk",
     "[n]=n",
-    "[of] =əv",
-    "[orough]=ɚo",
-    "w[or]t=ɚ", // added
-    "[or]t=ɔɹ", // added
-    "[or]e=ɔɹ", // added
-    "#:[or]=ɚ",
-    "#:[ors]=ɚz",
-    "[or]=ɔɹ",
-    " [one]=wʌn",
+    "[of] =xv",
+    "[orough]=Ro",
+    "w[or]t=R", // added
+    "[or]t=cr", // added
+    "[or]e=cr", // added
+    "#:[or]=R",
+    "#:[ors]=Rz",
+    "[or]=cr",
+    " [one]=w^n",
     "[ow]=o",
-    " [over]=ovɚ",
-    "[ov]=ʌv",
+    " [over]=ovR",
+    "[ov]=^v",
     "[o]^%=o",
     "[o]^en=o",
     "[o]^i#=o",
     "[ol]d=ol",
-    "[ought]=ɔt",
-    "[ough]=əf",
-    " [ou]=aw",
-    "[ouse] =aws", // added: house, mouse, blouse (not famous)
-    "h[ou]s#=aw",
-    "[ous]=əs",
-    "[our]=ɔɹ",
-    "[ould]=ʊd",
-    "^[ou]^l=ʌ",
+    "[ought]=ct",
+    "[ough]=xf",
+    " [ou]=W",
+    "[ouse] =Ws", // added: house, mouse, blouse (not famous)
+    "h[ou]s#=W",
+    "[ous]=xs",
+    "[our]=cr",
+    "[ould]=Ud",
+    "^[ou]^l=^",
     "[oup]=up",
-    "[ou]=aw",
-    "[oy]=ɔɪ",
-    "[oing]=oɪŋ",
-    "[oi]=ɔɪ",
-    "[oor]=ɔɹ",
-    "[ook]=ʊk",
-    "[ood]=ʊd",
+    "[ou]=W",
+    "[oy]=O",
+    "[oing]=oIG",
+    "[oi]=O",
+    "[oor]=cr",
+    "[ook]=Uk",
+    "[ood]=Ud",
     "[oo]=u",
     "[o]e=o",
     "[o] =o",
     "[oa]=o",
     " [only]=onli",
-    " [once]=wʌns",
+    " [once]=w^ns",
     "[on ' t]=ont",
-    "c[o]n=ɑ",
-    "[o]ng=ɔ",
-    " :^[o]n=ʌ",
-    "i[on]=ən",
-    "#:[on] =ən",
-    "#^[on]=ən",
+    "c[o]n=a",
+    "[o]ng=c",
+    " :^[o]n=^",
+    "i[on]=xn",
+    "#:[on] =xn",
+    "#^[on]=xn",
     "[o]st=o",
-    "[of]^=ɔf",
-    "[other]=ʌðɚ",
-    "[oss]=ɔs",
-    "#:^[om]=ʌm",
+    "[of]^=cf",
+    "[other]=^DR",
+    "[oss]=cs",
+    "#:^[om]=^m",
     "[o]cus=o", // added
-    "[o]=ɑ",
-    "[phys]=fɪz", // added
+    "[o]=a",
+    "[phys]=fIz", // added
     "[photo]=foto",
     "[ph]=f",
     "[peop]=pip",
-    "[pow]=paw",
-    "[put]+=pjut", // added
-    "[put]=pʊt",
+    "[pow]=pW",
+    "[put]+=pyut", // added
+    "[put]=pUt",
     " [ps]=s", // added
     "[p]=p",
-    "[quar]=kwɔɹ",
+    "[quar]=kwcr",
     "[qu]=kw",
     "[q]=k",
-    "[re]^#=ɹi",
-    "[rho]=ɹo", // added
-    "[rh]=ɹ",   // added
-    "[r]=ɹ",
-    "[sh]=ʃ",
-    "#[sion]=ʒən",
-    "[some]=sʌm",
-    "#[sur]#=ʒɚ",
-    "[sur]#=ʃɚ",
-    "#[su]#=ʒu",
-    "#[ssu]#=ʃu",
+    "[re]^#=ri",
+    "[rho]=ro", // added
+    "[rh]=r",   // added
+    "[r]=r",
+    "[sh]=S",
+    "#[sion]=Zxn",
+    "[some]=s^m",
+    "#[sur]#=ZR",
+    "[sur]#=SR",
+    "#[su]#=Zu",
+    "#[ssu]#=Su",
     "#[sed] =zd",
     "#[s]#=z",
-    "[said]=sɛd",
-    "^[sion]=ʃən",
+    "[said]=sEd",
+    "^[sion]=Sxn",
     "[s]s",
     ".[s] =z",
     "#:e[s] =z",
@@ -342,220 +331,220 @@ const RAW_RULES: &[&str] = &[
     " [sch]=sk",
     "[s]c+",
     "#[sm]=zm",
-    "#[sn] '=zən",
+    "#[sn] '=zxn",
     "[s]=s",
     "[to] =tu",
-    "[that] =ðæt",
-    " [they]=ðɛɪ",
-    " [there]=ðɛɹ",
-    "[ther]=ðɚ",
-    "[their]=ðɛɹ",
-    "[these] =ðiz",
-    " [then]=ðɛn",
-    "[through]=θɹu",
-    "[those]=ðoz",
-    "[though] =ðo",
-    " [thus]=ðʌs",
-    "[th]=θ",
-    "#:[ted] =tɪd",
-    "s[ti]#n=tʃ",
-    "[ti]o=ʃ",
-    "[ti]a=ʃ",
-    "[tien]=ʃən",
-    "[tur]#=tʃɚ",
-    "[tu]a=tʃu",
+    "[that] =D@t",
+    " [they]=De",
+    " [there]=DEr",
+    "[ther]=DR",
+    "[their]=DEr",
+    "[these] =Diz",
+    " [then]=DEn",
+    "[through]=Tru",
+    "[those]=Doz",
+    "[though] =Do",
+    " [thus]=D^s",
+    "[th]=T",
+    "#:[ted] =tId",
+    "s[ti]#n=C",
+    "[ti]o=S",
+    "[ti]a=S",
+    "[tien]=Sxn",
+    "[tur]#=CR",
+    "[tu]a=Cu",
     " [two]=tu",
     "[t]=t",
-    " [un]i=jun",
-    " [un]=ʌn",
-    " [upon]=əpɔn",
-    "@[ur]#=ʊɹ",
-    "[ur]#=jʊɹ",
-    "[ur]=ɚ",
-    "[u]^ =ʌ",
-    "[u]^^=ʌ",
-    "[uy]=aɪ",
+    " [un]i=yun",
+    " [un]=^n",
+    " [upon]=xpcn",
+    "@[ur]#=Ur",
+    "[ur]#=yUr",
+    "[ur]=R",
+    "[u]^ =^",
+    "[u]^^=^",
+    "[uy]=A",
     " g[u]#",
     "g[u]%",
     "g[u]#=w",
-    "#n[u]=ju",
+    "#n[u]=yu",
     "@[u]=u",
-    "[u]=ju",
-    "[view]=vju",
-    " [viol]=vaɪl", // added
+    "[u]=yu",
+    "[view]=vyu",
+    " [viol]=vAl", // added
     " [volt]=volt", // added
     "[v]=v",
-    " [were]=wɚ",
-    " [wave]=wɛɪv", // added
-    "[wa]s=wɑ",
-    "[wa]t=wɑ",
-    "[where]=wɛɹ",
-    "[what]=wɑt",
+    " [were]=wR",
+    " [wave]=wev", // added
+    "[wa]s=wa",
+    "[wa]t=wa",
+    "[where]=wEr",
+    "[what]=wat",
     "[whol]=hol",
     "[who]=hu",
-    "[wh]=ʍ",
-    "[war]=wɔɹ",
-    "[wor]^=wɚ",
-    "[wr]=ɹ",
+    "[wh]=w",
+    "[war]=wcr",
+    "[wor]^=wR",
+    "[wr]=r",
     "[w]=w",
     " [x]#=z",   // added
     " e[x]#=gz", // added
     "[x]=ks",
-    "[young]=jʌŋ",
-    " [you]=ju",
-    " [yes]=jɛs",
-    " [y]=j",
-    "if[y] =aɪ", // added
+    "[young]=y^G",
+    " [you]=yu",
+    " [yes]=yEs",
+    " [y]=y",
+    "if[y] =A", // added
     "#:^[y] =i",
     "#:^[y]i=i",
-    " :[y] =aɪ",
-    " :[y]#=aɪ",
-    " :[y]^+:#=ɪ",
-    " :[y]^#=aɪ",
-    "[y]=ɪ",
+    " :[y] =A",
+    " :[y]#=A",
+    " :[y]^+:#=I",
+    " :[y]^#=A",
+    "[y]=I",
     "[z]=z",
 ];
 
 const DICTIONARY: &[(&str, &str)] = &[
-    ("a", "ə"),
-    ("across", "əkɹɔs"),
-    ("allow", "əlaw1"),
-    ("answer", "æ1nsɚ"),
-    ("antenna", "æntɛ1nə"), // mostly stress
-    ("anyone", "ɛ1niwʌ2n"),
-    ("apply", "əplaɪ"),
-    ("are", "ɑɹ"),
-    ("argue", "ɑɹgju"),
-    ("attempt", "ətɛmt"),
-    ("aware", "əwɛ2ɚ"),
-    ("bear", "bɛɚ"),
-    ("better", "bɛ1tɚ"), // only here for stress
-    ("british", "bɹɪ1tɪʃ"),
-    ("category", "kæ1təgɔɹi"),
-    ("certain", "sɚ1tən"),
-    ("character", "kɛ1ɚəktɚ"),
-    ("chief", "tʃif"),
-    ("children", "tʃɪldɹɛn"),
-    ("civil", "sɪvəl"),
-    ("clothing", "kloðɪŋ"),
-    ("colonial", "kəlo1nɪəl"),
-    ("color", "kʌ1lɚ"),
-    ("company", "kʌ1mpəni"),
-    ("consider", "kʌnsɪ1dɚ"),
-    ("control", "kʌntɹo1l"),
-    ("contempt", "kʌntɛ1mt"),
-    ("cost", "kɔst"), // maybe ɑ
-    ("country", "kʌ1ntɹi"),
-    ("cycle", "saɪkəl"),
-    ("decent", "disənt"),
-    ("death", "dɛθ"),
-    ("design", "dəzaɪn"),
-    ("different", "dɪ1fɹɛnt"),
+    ("a", "x"),
+    ("across", "xkrcs"),
+    ("allow", "xl'W"),
+    ("answer", "'@nsR"),
+    ("antenna", "@nt'Enx"), // mostly stress
+    ("anyone", "'Eniw\"^n"),
+    ("apply", "xplA"),
+    ("are", "ar"),
+    ("argue", "argyu"),
+    ("attempt", "xtEmt"),
+    ("aware", "xw\"ER"),
+    ("bear", "bER"),
+    ("better", "b'EtR"), // only here for stress
+    ("british", "br'ItIS"),
+    ("category", "k'@txgcri"),
+    ("certain", "s'Rtxn"),
+    ("character", "k'ERxktR"),
+    ("chief", "Cif"),
+    ("children", "CIldrEn"),
+    ("civil", "sIvxl"),
+    ("clothing", "kloDIG"),
+    ("colonial", "kxl'onIxl"),
+    ("color", "k'^lR"),
+    ("company", "k'^mpxni"),
+    ("consider", "k^ns'IdR"),
+    ("control", "k^ntr'ol"),
+    ("contempt", "k^nt'Emt"),
+    ("cost", "kcst"), // maybe ɑ
+    ("country", "k'^ntri"),
+    ("cycle", "sAkxl"),
+    ("decent", "disxnt"),
+    ("death", "dET"),
+    ("design", "dxzAn"),
+    ("different", "d'IfrEnt"),
     ("do", "du"),
-    ("does", "dʌz"),
-    ("done", "dʌn"),
-    ("driven", "dɹɪvən"),
-    ("elegant", "ɛ1ləgənt"),
-    ("enter", "ɛntɚ"),
-    ("enforce", "ɛnfɔɹs"),
-    ("equal", "ikwəl"),
-    ("evil", "i1vɪl"),
-    ("father", "fɑ1ðɚ"),
+    ("does", "d^z"),
+    ("done", "d^n"),
+    ("driven", "drIvxn"),
+    ("elegant", "'Elxgxnt"),
+    ("enter", "EntR"),
+    ("enforce", "Enfcrs"),
+    ("equal", "ikwxl"),
+    ("evil", "'ivIl"),
+    ("father", "f'aDR"),
     ("field", "fild"),
-    ("fix", "fɪks"), // for suffix behavior
-    ("fixes", "fɪksəz"),
+    ("fix", "fIks"), // for suffix behavior
+    ("fixes", "fIksxz"),
     ("food", "fud"),
-    ("foot", "fʊt"),
-    ("fortunate", "fɔ1ɹtʃənət"),
-    ("gauge", "gɛɪdʒ"),
-    ("gone", "gɔn"),
-    ("grief", "gɹif"),
-    ("half", "hæf"),
-    ("heard", "hɚd"),
-    ("heart", "hɑɹt"),
-    ("hey", "hɛɪ"),
-    ("honest", "ɔnɛst"),
-    ("honor", "ʌ1nɚ"),
-    ("horizon", "hɔɹaɪ1zən"),
-    ("hostile", "hɑ1stəl"),
-    ("hundred", "hʌndɹɛd"),
-    ("i", "aɪ"),
-    ("ideal", "aɪdi1l"),
-    ("incline", "ɪnklaɪ1n"),
-    ("laugh", "læf"),
-    ("level", "lɛvəl"),
-    ("listen", "lɪ1sɛn"),
-    ("living", "lɪ1vɪŋ"),
-    ("livelihood", "laɪ1vlihʊd"),
+    ("foot", "fUt"),
+    ("fortunate", "f'crCxnxt"),
+    ("gauge", "geJ"),
+    ("gone", "gcn"),
+    ("grief", "grif"),
+    ("half", "h@f"),
+    ("heard", "hRd"),
+    ("heart", "hart"),
+    ("hey", "he"),
+    ("honest", "cnEst"),
+    ("honor", "'^nR"),
+    ("horizon", "hcr'Azxn"),
+    ("hostile", "h'astxl"),
+    ("hundred", "h^ndrEd"),
+    ("i", "A"),
+    ("ideal", "Ad'il"),
+    ("incline", "Inkl'An"),
+    ("laugh", "l@f"),
+    ("level", "lEvxl"),
+    ("listen", "l'IsEn"),
+    ("living", "l'IvIG"),
+    ("livelihood", "l'AvlihUd"),
     ("loose", "lus"),
     ("lose", "luz"),
-    ("machine", "mæʃi1n"),
-    ("major", "mɛɪ1dʒɚ"),
-    ("material", "məti1ɹi2əl"),
-    ("meant", "mɛnt"),
-    ("mix", "mɪks"), // for suffix behavior
-    ("money", "mʌ1ni"),
-    ("muscle", "mʌsəl"),
-    ("national", "næ1ʃənəl"),
-    ("necessary", "nɛ1səsɛ2ɚi"),
-    ("none", "nʌn"),
-    ("now", "naw"),
-    ("often", "ɔ1fɛn"),
-    ("online", "ɑnlaɪn"),
-    ("operate", "ɔ1pɚɛɪ2t"),
-    ("panel", "pænəl"),
+    ("machine", "m@S'in"),
+    ("major", "m'eJR"),
+    ("material", "mxt'ir\"ixl"),
+    ("meant", "mEnt"),
+    ("mix", "mIks"), // for suffix behavior
+    ("money", "m'^ni"),
+    ("muscle", "m^sxl"),
+    ("national", "n'@Sxnxl"),
+    ("necessary", "n'Esxs\"ERi"),
+    ("none", "n^n"),
+    ("now", "nW"),
+    ("often", "'cfEn"),
+    ("online", "anlAn"),
+    ("operate", "'cpR\"et"),
+    ("panel", "p@nxl"),
     ("piece", "pis"),
-    ("pizza", "pitsə"),
+    ("pizza", "pitsx"),
     ("poll", "pol"),
-    ("primetime", "pɹaɪmtaɪm"),
-    ("private", "pɹaɪ1vət"),
-    ("president", "pɹɛ1zɪdɛ2nt"),
-    ("privy", "pɹɪ1vi"),
-    ("profile", "pɹofaɪl"),
-    ("program", "pɹogɹæm"),
-    ("promote", "pɹomo1t"), // stress
-    ("pull", "pʊl"),
-    ("push", "pʊʃ"),
-    ("quality", "kwɑ1lɪti"),
-    ("rational", "ɹæ1ʃənəl"),
-    ("reality", "ɹiæ1lɪti"),
-    ("reference", "ɹɛfɹɛns"),
-    ("relative", "ɹɛ1lətɪv"),
-    ("reply", "ɹɛplaɪ"),
-    ("revive", "ɹəvaɪv"),
-    ("senior", "si1njɚ"),
-    ("slavery", "slɛɪvɚi"),
-    ("significant", "sɪgnɪ1fɪkənt"),
-    ("software", "sɔftwɛɹ"),
-    ("someone", "sʌ1mwʌn"),
-    ("sometimes", "sʌ1mtaɪ1mz"),
-    ("spirit", "spi1ɹɪt"),
-    ("supply", "sʌplaɪ1"),
-    ("surprise", "sʌpɹaɪ1z"),
-    ("survive", "sɚvaɪ1v"),
-    ("tax", "tæks"),
-    ("terrible", "tɛ1ɹɪbəl"),
-    ("territory", "tɛ1ɹɪtɔɹ2i"),
-    ("this", "ðɪs"),
-    ("than", "ðæn"),
-    ("the", "ðə"),
-    ("them", "ðɛm"),
-    ("threat", "θɹɛt"),
-    ("today", "tədɛɪ"),
-    ("together", "təgɛ1ðɚ"),
-    ("total", "to1təl"),
-    ("tough", "tʌf"),
-    ("town", "tawn"),
-    ("travel", "tɹævəl"),
-    ("vague", "vɛɪg"),
-    ("veteran", "vɛ1təɹən"),
-    ("vein", "vɛɪn"),
-    ("want", "wʌnt"),
-    ("weapon", "wɛ1pən"),
-    ("widespread", "waɪdspɹɛd"),
-    ("window", "wɪ1ndo"),
-    ("woman", "wʊ1mən"),
-    ("women", "wɪ1mən"),
+    ("primetime", "prAmtAm"),
+    ("private", "pr'Avxt"),
+    ("president", "pr'EzId\"Ent"),
+    ("privy", "pr'Ivi"),
+    ("profile", "profAl"),
+    ("program", "progr@m"),
+    ("promote", "prom'ot"), // stress
+    ("pull", "pUl"),
+    ("push", "pUS"),
+    ("quality", "kw'alIti"),
+    ("rational", "r'@Sxnxl"),
+    ("reality", "ri'@lIti"),
+    ("reference", "rEfrEns"),
+    ("relative", "r'ElxtIv"),
+    ("reply", "rEplA"),
+    ("revive", "rxvAv"),
+    ("senior", "s'inyR"),
+    ("slavery", "slevRi"),
+    ("significant", "sIgn'IfIkxnt"),
+    ("software", "scftwEr"),
+    ("someone", "s'^mw^n"),
+    ("sometimes", "s'^mt'Amz"),
+    ("spirit", "sp'irIt"),
+    ("supply", "s^pl'A"),
+    ("surprise", "s^pr'Az"),
+    ("survive", "sRv'Av"),
+    ("tax", "t@ks"),
+    ("terrible", "t'ErIbxl"),
+    ("territory", "t'ErIt\"cri"),
+    ("this", "DIs"),
+    ("than", "D@n"),
+    ("the", "Dx"),
+    ("them", "DEm"),
+    ("threat", "TrEt"),
+    ("today", "txde"),
+    ("together", "txg'EDR"),
+    ("total", "t'otxl"),
+    ("tough", "t^f"),
+    ("town", "tWn"),
+    ("travel", "tr@vxl"),
+    ("vague", "veg"),
+    ("veteran", "v'Etxrxn"),
+    ("vein", "ven"),
+    ("want", "w^nt"),
+    ("weapon", "w'Epxn"),
+    ("widespread", "wAdsprEd"),
+    ("window", "w'Indo"),
+    ("woman", "w'Umxn"),
+    ("women", "w'Imxn"),
 ];
 
 impl TextToPhoneme {
@@ -862,7 +851,7 @@ const FUNCTION_WORDS: &[&str] = &[
     "will", "would", "shall", "should", "can", "could", "may", "might", "must", "not", "there",
 ];
 
-/// An element of a word on its way from IPA to the ASCII alphabet.
+/// An element of a word: one ASCII phoneme with its stress.
 #[derive(Clone, Copy, PartialEq)]
 struct Seg {
     c: char,
@@ -870,73 +859,85 @@ struct Seg {
     stress: u8,
 }
 
-/// IPA (as produced by the rules above) to one-character DECtalk symbols.
-fn ipa_to_segs(ipa: &str) -> Result<Vec<Seg>, String> {
-    let chars: Vec<char> = ipa.chars().collect();
+/// Syllabic phonemes of the ASCII alphabet.
+const VOWELS: &str = "iIeE@aAW^coOUuxRLN";
+/// Non-syllabic phonemes of the ASCII alphabet.
+const CONSONANTS: &str = "bdfghklmnprstvwzyGSZTDCJ";
+
+/// Parse ASCII phonemes (DECtalk one-character symbols, as produced by the
+/// rules and dictionary) into segments. `'` and `"` before a vowel mark
+/// primary and secondary stress.
+fn ascii_to_segs(ascii: &str) -> Result<Vec<Seg>, String> {
     let mut out: Vec<Seg> = vec![];
-    let mut i = 0;
-    while i < chars.len() {
-        let pair = chars.get(i + 1).map(|&n| (chars[i], n));
-        let two = match pair {
-            Some(('ɛ' | 'e', 'ɪ')) => Some('e'),
-            Some(('a', 'ɪ')) => Some('A'),
-            Some(('a', 'w')) => Some('W'),
-            Some(('ɔ', 'ɪ')) => Some('O'),
-            Some(('t', 'ʃ')) => Some('C'),
-            Some(('d', 'ʒ')) => Some('J'),
-            _ => None,
-        };
-        let (c, len) = if let Some(c) = two {
-            (c, 2)
-        } else {
-            let c = match chars[i] {
-                'ə' => 'x',
-                'ɚ' => 'R',
-                'ɛ' => 'E',
-                'æ' => '@',
-                'ɑ' => 'a',
-                'ɔ' => 'c',
-                'o' => 'o',
-                'u' | 'ʉ' => 'u',
-                'ʊ' => 'U',
-                'ʌ' => '^',
-                'ɪ' => 'I',
-                'i' => 'i',
-                'ɹ' => 'r',
-                'ŋ' => 'G',
-                'ʃ' => 'S',
-                'ʒ' => 'Z',
-                'θ' => 'T',
-                'ð' => 'D',
-                'ʍ' => 'w',
-                'j' => 'y',
-                '1' | '2' => {
-                    if let Some(v) = out.iter_mut().rev().find(|s| s.vowel) {
-                        v.stress = if chars[i] == '1' { 1 } else { 2 };
-                    }
-                    i += 1;
+    let mut stress = 0;
+    for c in ascii.chars() {
+        match c {
+            '\'' => stress = 1,
+            '"' => stress = 2,
+            _ if VOWELS.contains(c) => {
+                out.push(Seg {
+                    c,
+                    vowel: true,
+                    stress: std::mem::take(&mut stress),
+                });
+            }
+            _ if CONSONANTS.contains(c) => {
+                // Collapse doubled consonants from the spelling rules
+                // ("little").
+                if out.last().is_some_and(|s| s.c == c) {
                     continue;
                 }
-                'ː' => {
-                    i += 1;
-                    continue;
-                }
-                c @ ('b' | 'd' | 'f' | 'g' | 'h' | 'k' | 'l' | 'm' | 'n' | 'p' | 's' | 't'
-                | 'v' | 'w' | 'z') => c,
-                c => return Err(format!("no ASCII phoneme for '{c}' in {ipa}")),
-            };
-            (c, 1)
-        };
-        let vowel = "iIeE@aAW^coOUuxR".contains(c);
-        // Collapse doubled consonants from the spelling rules ("little").
-        if !vowel && out.last().is_some_and(|s| s.c == c) {
-            i += len;
-            continue;
+                out.push(Seg {
+                    c,
+                    vowel: false,
+                    stress: 0,
+                });
+            }
+            _ => return Err(format!("unknown phoneme '{c}' in {ascii}")),
         }
-        out.push(Seg { c, vowel, stress: 0 });
-        i += len;
     }
     Ok(out)
+}
+
+/// ASCII phonemes to IPA, for the LPC concatenation synthesizer
+/// ([`crate::phonemes::parse`]). Stress marks are dropped.
+pub fn ascii_to_ipa(ascii: &str) -> String {
+    let mut out = String::new();
+    for c in ascii.chars() {
+        let s = match c {
+            'x' => "ə",
+            'R' => "ɚ",
+            'E' => "ɛ",
+            '@' => "æ",
+            'a' => "ɑ",
+            'c' => "ɔ",
+            'U' => "ʊ",
+            '^' => "ʌ",
+            'I' => "ɪ",
+            'e' => "ɛɪ",
+            'A' => "aɪ",
+            'W' => "aw",
+            'O' => "ɔɪ",
+            'C' => "tʃ",
+            'J' => "dʒ",
+            'r' => "ɹ",
+            'G' => "ŋ",
+            'S' => "ʃ",
+            'Z' => "ʒ",
+            'T' => "θ",
+            'D' => "ð",
+            'y' => "j",
+            'L' => "əl",
+            'N' => "ən",
+            '\'' | '"' => continue,
+            _ => {
+                out.push(c);
+                continue;
+            }
+        };
+        out.push_str(s);
+    }
+    out
 }
 
 /// Suffixes that are neutral to stress, with their syllable counts. They
@@ -1095,59 +1096,59 @@ fn assign_stress(word: &str, segs: &mut [Seg]) {
     segs[k].stress = 1;
 }
 
-/// Prefixes stripped to find a dictionary stem, with their IPA. They are
+/// Prefixes stripped to find a dictionary stem, with their phonemes. They are
 /// left unstressed; the stem carries the primary stress.
 const PREFIXES: &[(&str, &str)] = &[
-    ("un", "ʌn"),
-    ("non", "nɑn"),
-    ("dis", "dɪs"),
-    ("mis", "mɪs"),
-    ("re", "ɹi"),
-    ("pre", "pɹi"),
-    ("in", "ɪn"),
-    ("im", "ɪm"),
-    ("over", "ovɚ"),
-    ("under", "ʌndɚ"),
+    ("un", "^n"),
+    ("non", "nan"),
+    ("dis", "dIs"),
+    ("mis", "mIs"),
+    ("re", "ri"),
+    ("pre", "pri"),
+    ("in", "In"),
+    ("im", "Im"),
+    ("over", "ovR"),
+    ("under", "^ndR"),
 ];
 
-/// Suffixes stripped to find a dictionary stem. `None` means the IPA
+/// Suffixes stripped to find a dictionary stem. `None` means the phonemes
 /// depends on the stem's last sound (-s, -es, -ed).
 const SUFFIXES: &[(&str, Option<&str>)] = &[
     ("ly", Some("li")),
-    ("ness", Some("nəs")),
-    ("ments", Some("mənts")),
-    ("ment", Some("mənt")),
-    ("ful", Some("fəl")),
-    ("less", Some("ləs")),
-    ("ers", Some("ɚz")),
-    ("er", Some("ɚ")),
-    ("est", Some("əst")),
-    ("ings", Some("ɪŋz")),
-    ("ing", Some("ɪŋ")),
-    ("able", Some("əbəl")),
-    ("ism", Some("ɪzəm")),
-    ("ist", Some("ɪst")),
-    ("ize", Some("aɪz")),
-    ("ship", Some("ʃɪp")),
-    ("hood", Some("hʊd")),
+    ("ness", Some("nxs")),
+    ("ments", Some("mxnts")),
+    ("ment", Some("mxnt")),
+    ("ful", Some("fxl")),
+    ("less", Some("lxs")),
+    ("ers", Some("Rz")),
+    ("er", Some("R")),
+    ("est", Some("xst")),
+    ("ings", Some("IGz")),
+    ("ing", Some("IG")),
+    ("able", Some("xbxl")),
+    ("ism", Some("Izxm")),
+    ("ist", Some("Ist")),
+    ("ize", Some("Az")),
+    ("ship", Some("SIp")),
+    ("hood", Some("hUd")),
     ("ed", None),
     ("es", None),
     ("s", None),
 ];
 
-/// IPA of -s/-es or -ed after a stem whose pronunciation is `stem`.
-fn inflection_ipa(stem: &str, suffix: &str) -> String {
-    let last = stem.chars().rev().find(|c| !c.is_ascii_digit());
-    let voiceless = matches!(last, Some('p' | 't' | 'k' | 'f' | 'θ' | 's' | 'ʃ'));
+/// Phonemes of -s/-es or -ed after a stem whose pronunciation is `stem`.
+fn inflection(stem: &str, suffix: &str) -> String {
+    let last = stem.chars().rev().find(|c| !matches!(c, '\'' | '"'));
+    let voiceless = matches!(last, Some('p' | 't' | 'k' | 'f' | 'T' | 's' | 'S' | 'C'));
     if suffix == "ed" {
         match last {
-            Some('t' | 'd') => "ɪd",
+            Some('t' | 'd') => "Id",
             _ if voiceless => "t",
             _ => "d",
         }
     } else {
         match last {
-            Some('s' | 'z' | 'ʃ' | 'ʒ') => "ɪz",
+            Some('s' | 'z' | 'S' | 'Z' | 'C' | 'J') => "Iz",
             _ if voiceless => "s",
             _ => "z",
         }
@@ -1210,7 +1211,7 @@ impl TextToPhoneme {
             }
             for c in cands {
                 if let Some(x) = self.lookup(&c) {
-                    let ipa = ipa.map_or_else(|| inflection_ipa(&x, suf), String::from);
+                    let ipa = ipa.map_or_else(|| inflection(&x, suf), String::from);
                     return Some(format!("{x}{ipa}"));
                 }
             }
@@ -1218,7 +1219,7 @@ impl TextToPhoneme {
         None
     }
 
-    /// Pronunciation of a word in IPA: the dictionary (with affixes
+    /// Pronunciation of a word in ASCII phonemes: the dictionary (with affixes
     /// stripped), else the letter-to-sound rules. For -ed and -ing, the
     /// rules are applied to the stem, so that rules for a final e (as in
     /// "fix" + "ed") don't see the suffix.
@@ -1234,7 +1235,7 @@ impl TextToPhoneme {
         {
             let x = self.pronounce(stem);
             let x = x.strip_suffix('s').map_or(x.clone(), |s| format!("{s}z"));
-            return format!("{x}ənt");
+            return format!("{x}xnt");
         }
         let has_vowel = |s: &str| s.bytes().any(|c| b"aeiouy".contains(&c));
         for suf in ["ed", "ing"] {
@@ -1256,7 +1257,7 @@ impl TextToPhoneme {
                     eprintln!("{word}: rules on stem \"{stem}{context}\" + -{suf}");
                 }
                 let x = self.translate(&format!(" {stem}{context} "));
-                let ipa = if suf == "ed" { inflection_ipa(&x, suf) } else { "ɪŋ".into() };
+                let ipa = if suf == "ed" { inflection(&x, suf) } else { "IG".into() };
                 return format!("{x}{ipa}");
             }
         }
@@ -1321,7 +1322,7 @@ impl TextToPhoneme {
                 continue;
             }
             let ipa = self.pronounce(&t);
-            let mut segs = ipa_to_segs(&ipa).map_err(|e| format!("{e} (\"{t}\")"))?;
+            let mut segs = ascii_to_segs(&ipa).map_err(|e| format!("{e} (\"{t}\")"))?;
             let function = FUNCTION_WORDS.contains(&t.as_str());
             if function {
                 segs.iter_mut().for_each(|s| s.stress = 0);
@@ -1446,8 +1447,8 @@ mod tests {
     #[test]
     fn affixes() {
         let mut ttp = TextToPhoneme::new();
-        ttp.dict.insert("fortunate", "fɔ1ɹtʃənət");
-        ttp.dict.insert("material", "mətɪ1ɹiəl");
+        ttp.dict.insert("fortunate", "f'crCxnxt");
+        ttp.dict.insert("material", "mxt'Irixl");
         assert_eq!(
             ttp.to_ascii("materialism materialists materialized").unwrap(),
             "C: mxt'IrixlIzxm C: mxt'IrixlIsts C: mxt'IrixlAzd ."
@@ -1465,12 +1466,12 @@ mod tests {
         let mut bad = vec![];
         for rule in RAW_RULES {
             let out = rule.rsplit_once('=').map_or("", |r| r.1);
-            if let Err(e) = ipa_to_segs(out) {
+            if let Err(e) = ascii_to_segs(out) {
                 bad.push(format!("{rule}: {e}"));
             }
         }
         for (w, p) in DICTIONARY {
-            if let Err(e) = ipa_to_segs(p) {
+            if let Err(e) = ascii_to_segs(p) {
                 bad.push(format!("{w}: {e}"));
             }
         }

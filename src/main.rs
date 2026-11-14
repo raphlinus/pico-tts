@@ -335,6 +335,7 @@ fn main_say(args: SayCmd) {
     } else {
         let ttp = crate::text_to_phoneme::TextToPhoneme::new();
         let phonemes = ttp.translate(&format!(" {} ", args.text));
+        let phonemes = crate::text_to_phoneme::ascii_to_ipa(&phonemes);
         phoneme_seq = crate::phonemes::parse(&phonemes);
     }
     let mut seq = crate::sequence::Sequence::new(phoneme_seq);

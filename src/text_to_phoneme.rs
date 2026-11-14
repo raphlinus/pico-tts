@@ -328,7 +328,7 @@ const RAW_RULES: &[&str] = &[
     "[s]=s",
     "[to] =tu",
     "[that] =ðæt",
-    " [they]=ðeɪ",
+    " [they]=ðɛɪ",
     " [there]=ðɛɹ",
     "[ther]=ðɚ",
     "[their]=ðɛɹ",
@@ -408,6 +408,7 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("do", "du"),
     ("fixed", "fɪkst"),
     ("foot", "fʊt"),
+    ("fortunate", "fɔ1ɹtʃənət"),
     ("i", "aɪ"),
     ("laugh", "læf"),
     ("listen", "lɪ1sɛn"),
@@ -431,6 +432,7 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("total", "to1təl"),
     ("tough", "tʌf"),
     ("town", "tawn"),
+    ("want", "wʌnt"),
     ("weapon", "wɛ1pən"),
     ("window", "wɪ1ndo"),
     ("woman", "wʊ1mən"),
@@ -738,7 +740,7 @@ fn ipa_to_segs(ipa: &str) -> Result<Vec<Seg>, String> {
     while i < chars.len() {
         let pair = chars.get(i + 1).map(|&n| (chars[i], n));
         let two = match pair {
-            Some(('ɛ', 'ɪ')) => Some('e'),
+            Some(('ɛ' | 'e', 'ɪ')) => Some('e'),
             Some(('a', 'ɪ')) => Some('A'),
             Some(('a', 'w')) => Some('W'),
             Some(('ɔ', 'ɪ')) => Some('O'),
@@ -1229,5 +1231,23 @@ mod tests {
             "C: ^nf'cRCxnxtli , C: f'cRCxnxts ."
         );
         assert_eq!(ttp.to_ascii("fixed").unwrap(), "C: f'Ikst .");
+    }
+
+    /// Every rule output and dictionary entry must map to ASCII phonemes.
+    #[test]
+    fn all_outputs_map() {
+        let mut bad = vec![];
+        for rule in RAW_RULES {
+            let out = rule.rsplit_once('=').map_or("", |r| r.1);
+            if let Err(e) = ipa_to_segs(out) {
+                bad.push(format!("{rule}: {e}"));
+            }
+        }
+        for (w, p) in DICTIONARY {
+            if let Err(e) = ipa_to_segs(p) {
+                bad.push(format!("{w}: {e}"));
+            }
+        }
+        assert!(bad.is_empty(), "{bad:#?}");
     }
 }

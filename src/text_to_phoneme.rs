@@ -1039,8 +1039,8 @@ const PREFIXES: &[(&str, &str)] = &[
     ("non", "nɑn"),
     ("dis", "dɪs"),
     ("mis", "mɪs"),
-    ("re", "ri"),
-    ("pre", "pri"),
+    ("re", "ɹi"),
+    ("pre", "pɹi"),
     ("in", "ɪn"),
     ("im", "ɪm"),
     ("over", "ovɚ"),
@@ -1108,6 +1108,13 @@ impl TextToPhoneme {
         }
         for &(suf, ipa) in SUFFIXES {
             let Some(stem) = word.strip_suffix(suf) else { continue };
+            // Spelled -es only after a sibilant or o (fixes, goes), not
+            // honoress.
+            if suf == "es"
+                && !["s", "x", "z", "sh", "ch", "o"].iter().any(|e| stem.ends_with(e))
+            {
+                continue;
+            }
             if stem.len() < 2 {
                 continue;
             }
@@ -1265,8 +1272,10 @@ impl TextToPhoneme {
                     // Schwa + n after an alveolar obstruent, before a
                     // consonant or word end, is syllabic N (button, isn't).
                     'x' if prev.is_some_and(|p| "tdsz".contains(p.c))
+                        && j >= 2
+                        && (segs[j - 2].vowel || segs[j - 2].c == 'R')
                         && in_word_next.is_some_and(|n| n.c == 'n')
-                        && !segs.get(j + 2).is_some_and(|n| n.vowel) =>
+                        && !segs[j + 2..].iter().any(|n| n.vowel) =>
                     {
                         segs[j] = Seg {
                             c: 'N',

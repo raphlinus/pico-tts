@@ -80,6 +80,17 @@ pub enum Rule {
     /// comment ("aspiration starts during plosive burst") and the narrator
     /// code say. Off by default.
     AspBurstLiteral,
+    /// C.8.3: transition into a stop is partly discontinuous, with short
+    /// formant transitions.
+    StopTransition,
+    /// C.9, C.9.1: boundary values at consonant-vowel boundaries (stop
+    /// loci), computed with the previous and current segments swapped when
+    /// the current one is the consonant.
+    Loci,
+    /// C.10: segment-specific boundary adjustments (DX averaging, lateral
+    /// release jump, gradual voicing offsets, no articulatory targets in
+    /// glottal segments, abrupt plosive offset).
+    Modifications,
 }
 
 /// How to read the final ELSE rule of C.5.
@@ -465,7 +476,7 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
         let mut mintime = [prev_start; N_PAR];
         let mut trantype = [Trantype::Setsmo; N_PAR];
         let mut tcf = TCF_DEFAULT;
-        let bper = BPER_DEFAULT[Manner::of(prev) as usize][Manner::of(phone) as usize];
+        let mut bper = [BPER_DEFAULT[Manner::of(prev) as usize][Manner::of(phone) as usize]; N_PAR];
         let mut aspdux = 0;
         let mut aspaml = ASPAMP;
         let mut oldval_avc_inc = 0.;
@@ -545,7 +556,7 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
         }
         // C.8.1 fricatives and plosives
         let next_is = |f: Flags| next.is_some_and(|n| n.is(f));
-        if opts.on(Rule::Obstruent) && phone.is(Flags::PLOSIVE | Flags::FRICATIVE) {
+        if opts.on(Rule::Obstruent) && (phone.is(Flags::PLOSIVE) || phone.is(Flags::FRICATIVE)) {
             // Devoice unless a vowel follows.
             if phone.is(Flags::VOICED) && !next_is(Flags::VOWEL) {
                 target[AVC] = (target[AVC] - 30.).max(0.);
@@ -600,6 +611,20 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
         } else {
             None
         };
+
+        // C.8.3 stops: the transition into a stop is partly discontinuous.
+        if opts.on(Rule::StopTransition) && phone.is(Flags::STOP) && !prev.is(Flags::STOP) {
+            trantype[AV..=F1].fill(Trantype::Smodis);
+            trantype[F2..=B3].fill(Trantype::Setsmo);
+            trantype[AVC] = Trantype::Smodis;
+            if prev.is(Flags::HIGH) {
+                tcf[F2..=B3].fill(10.);
+                tcf[F1] = 15.;
+            } else if let Some(t) = tcobst(phone) {
+                tcf[F2..=B3].fill(t);
+                tcf[F1] = 0.5 * (t + 20.);
+            }
+        }
 
         if !opts.smooth {
             trantype = [Trantype::Discon; N_PAR];
@@ -690,21 +715,180 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
         let mut oldval: Pars = std::array::from_fn(|p| tracks.at(p, cumdur[p]));
         oldval[AVC] += oldval_avc_inc;
 
+        // C.9 adjustments. The rules are written for a consonant followed
+        // by a vowel; when the current segment has the higher manner class
+        // (as in a vowel followed by a stop) the two segments are swapped,
+        // along with Target and Oldval, and swapped back afterward, with
+        // each Bper set here complemented (as in the narrator's
+        // phonetc9.c).
+        if opts.on(Rule::Loci) {
+            let swap = Manner::of(phone) as u8 > Manner::of(prev) as u8;
+            let (cur, last) = if swap { (prev, phone) } else { (phone, prev) };
+            const SW: [usize; 4] = [F1, F2, F3, FNZ];
+            let (mut tg, mut ov) = (target, oldval);
+            if swap {
+                for p in SW {
+                    std::mem::swap(&mut tg[p], &mut ov[p]);
+                }
+            }
+            let mut bp: [Option<f32>; N_PAR] = [None; N_PAR];
+            if cur.is(Flags::RETRO) {
+                bp[F2] = Some(75.);
+                bp[F3] = Some(75.);
+            }
+            // SH and ZH constrain the boundary strongly.
+            if last.is(Flags::PALATAL) && !last.is(Flags::SONORANT) {
+                bp[F2] = Some(20.);
+                tcf[F2] += 30.;
+            }
+            // C.9.1 boundary values for stops.
+            if last.is(Flags::STOP) && !cur.is(Flags::STOP) {
+                // Printed as Bper[f2] <- 50, then Bper[f2] <- 0; the first
+                // is f1 (as in the narrator, and the nasal rule below sets
+                // Bper[f1] too).
+                bp[F1] = Some(50.);
+                bp[F2] = Some(0.);
+                bp[F3] = Some(0.);
+                if last.is(Flags::NASAL) {
+                    let d = Manner::of(cur) as i32 - Manner::of(last) as i32;
+                    bp[FNZ] = Some(if d > 1 { 100. } else { 0. });
+                    tcf[FNZ] = 150.;
+                    bp[F1] = Some(0.);
+                }
+                if last.is(Flags::LABIAL) && !cur.is(Flags::GLOTTAL) {
+                    if cur.is(Flags::FRONT) {
+                        bp[F2] = Some(65.);
+                        bp[F3] = Some(20.);
+                    } else {
+                        bp[F2] = Some(20.);
+                        bp[F3] = Some(70.);
+                    }
+                    if cur.is(Flags::RETRO) {
+                        ov[F3] = 1750.;
+                        bp[F3] = Some(20.);
+                    }
+                }
+                if last.is(Flags::ALVEOLAR) && cur.is(Flags::LATERAL) {
+                    ov[F2] = 1050.;
+                }
+                if last == Phone::Nn && !cur.is(Flags::LATERAL) {
+                    ov[F2] = 1400.;
+                }
+                if last.is(Flags::ALVEOLAR) && last != Phone::Nn && !cur.is(Flags::LATERAL) {
+                    ov[F2] = 1600.;
+                }
+                if last.is(Flags::ALVEOLAR) {
+                    ov[F3] = if cur.is(Flags::RETRO) { 2300. } else { 2620. };
+                }
+                if last.is(Flags::VELAR) {
+                    // The velar F2 locus follows the vowel: F1 for the
+                    // lip-rounding and F2 for the fronting part.
+                    ov[F2] = tg[F2] + (tg[F1] - 300.) * 2.;
+                    ov[F3] = ov[F2] + if cur.is(Flags::LABIAL) { 800. } else { 400. };
+                    if cur.is(Flags::FRONT) || cur == Phone::Aa {
+                        // Printed "KP-target[f2,f4]"; read as f2, f3.
+                        let kp = table_target(Phone::Kp, None, opts);
+                        ov[F2] = kp[F2];
+                        ov[F3] = kp[F3];
+                    }
+                    if last == Phone::Ng {
+                        ov[F2] = 0.5 * (ov[F2] + tg[F2]);
+                        ov[F3] = 0.5 * (ov[F3] + tg[F3]);
+                    }
+                    if matches!(cur, Phone::Iy | Phone::Ih) {
+                        ov[F2] += 250.;
+                        ov[F3] += 50.;
+                    }
+                }
+            }
+            if swap {
+                for p in SW {
+                    std::mem::swap(&mut tg[p], &mut ov[p]);
+                }
+            }
+            for p in SW {
+                target[p] = tg[p];
+                oldval[p] = ov[p];
+            }
+            for p in 0..N_PAR {
+                if let Some(b) = bp[p] {
+                    bper[p] = if swap && SW.contains(&p) { 100. - b } else { b };
+                }
+            }
+        }
+
+        // C.10 modifications (segment-specific parts, before the boundary
+        // values).
+        let mods = opts.on(Rule::Modifications);
+        if mods && phone == Phone::Dx {
+            if let Some(n) = next {
+                let nt = table_target(n, None, opts);
+                for p in F1..=F3 {
+                    target[p] = (target[p] + oldval[p] + nt[p]) / 3.;
+                }
+            }
+        }
+        if mods && prev.is(Flags::F2BACK) {
+            tcf[F2] = (tcf[F2] - 20.).max(0.);
+        }
+
         // C.10 modifications (generic parts)
         // Minimum formant separation is 200 Hz.
         for p in F1..F4 {
             target[p + 1] = target[p + 1].max(target[p] + 200.);
         }
-        let tcb = tcf;
-        let bvalf: Pars = std::array::from_fn(|p| {
+        let mut tcb = tcf;
+        // Glottal segments (SIL included) have no articulatory targets.
+        if mods && prev.is(Flags::GLOTTAL) {
+            oldval[A2..=B3].copy_from_slice(&target[A2..=B3]);
+        }
+        let mut bvalf: Pars = std::array::from_fn(|p| {
             if p <= AB {
                 // Amplitudes: average of target and old value.
                 0.5 * (target[p] + oldval[p])
             } else {
-                (bper * target[p] + (100. - bper) * oldval[p]) / 100.
+                (bper[p] * target[p] + (100. - bper[p]) * oldval[p]) / 100.
             }
         });
-        let bvalb = bvalf;
+        let mut bvalb = bvalf;
+        if mods {
+            // Discontinuous formant jump at a lateral release.
+            if prev.is(Flags::LATERAL) {
+                for p in [F1, F2] {
+                    bvalf[p] += 50.;
+                    bvalb[p] -= 50.;
+                }
+            }
+            // DISSMO in diphthongs is smoothed, so adjust the boundary.
+            if prev.is(Flags::NASAL) && phone.is(Flags::DIPHTHONG) {
+                bvalb[F1..=F3].copy_from_slice(&oldval[F1..=F3]);
+            }
+            // More gradual vowel amplitude offset.
+            if prev.is(Flags::VOWEL) {
+                tcb[AV] = 30.;
+            }
+            // More gradual voicing offset in a stop or fricative.
+            if prev.is(Flags::VOICED) && !phone.is(Flags::VOICED) && !phone.is(Flags::SONORANT) {
+                bvalb[AV] -= 6.;
+                bvalf[AV] = bvalb[AV];
+            }
+            if prev.is(Flags::VOICED)
+                && (prev.is(Flags::STOP) || prev.is(Flags::FRICATIVE))
+                && phone.is(Flags::SONORANT)
+                && phone.is(Flags::NASAL)
+            {
+                bvalb[AV] -= 4.;
+                bvalf[AV] = bvalb[AV];
+            }
+            if prev.is(Flags::GLOTTAL) {
+                bvalb[A2..=B3].copy_from_slice(&target[A2..=B3]);
+                bvalf[A2..=B3].copy_from_slice(&target[A2..=B3]);
+            }
+            // Stops have abrupt offset.
+            if prev.is(Flags::PLOSIVE) {
+                bvalf[AF] = target[AF];
+            }
+        }
 
         // C.7.1 diphthong rules
         let glide = vocalic_target_glide(phone).map(|g| g.values());

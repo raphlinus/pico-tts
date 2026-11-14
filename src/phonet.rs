@@ -91,6 +91,28 @@ pub enum Rule {
     /// release jump, gradual voicing offsets, no articulatory targets in
     /// glottal segments, abrupt plosive offset).
     Modifications,
+    /// C.6, C.6.2: sonorant rules (F4 shifts, transition times out of
+    /// liquids and glides, F2 coarticulation of RR and LL).
+    Sonorant,
+    /// C.7: vowel rules (schwa coarticulation, diphthong target shifts,
+    /// back-cavity time constants).
+    Vowel,
+    /// C.7: formants of short nonretroflex vowels shift toward
+    /// 490, 1450, 2500 Hz by exp(-duration / 60 ms).
+    Centralize,
+    /// C.8.2: fricative rules (quieter before a pause, short fricatives
+    /// louder, stronger voicing between vowels, palatal rounding).
+    Fricative,
+    /// C.8.4: nasal transition types.
+    Nasal,
+    /// C.9.2: boundary values and targets that depend on both segments
+    /// (alveolar stop before W, retroflex contexts, velars after glides).
+    CrossLoci,
+    /// C.9.2, as printed: F2 of a velar is 1900 Hz unless a W glide (or,
+    /// per the narrator, R) precedes. This overrides the vowel-dependent
+    /// velar locus of C.9.1 in a vowel-velar transition, and the narrator
+    /// has it commented out. Off by default.
+    VelarF2,
 }
 
 /// How to read the final ELSE rule of C.5.
@@ -147,7 +169,7 @@ pub struct Options {
 
 /// Rules that are off unless enabled, where the literal reading of the book
 /// is doubtful.
-const DEFAULT_OFF: &[Rule] = &[Rule::PreaspSil, Rule::AspBurstLiteral];
+const DEFAULT_OFF: &[Rule] = &[Rule::PreaspSil, Rule::AspBurstLiteral, Rule::VelarF2];
 
 impl Options {
     fn on(&self, rule: Rule) -> bool {
@@ -554,8 +576,86 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
                 trantype[F1..=B3].fill(Trantype::Setsmo);
             }
         }
-        // C.8.1 fricatives and plosives
         let next_is = |f: Flags| next.is_some_and(|n| n.is(f));
+        // Table target of the next segment.
+        let next_target = next.map(|n| table_target(n, None, opts));
+
+        // C.6 sonorants
+        if opts.on(Rule::Sonorant) && phone.is(Flags::SONORANT) {
+            // Lower F4 if the lips are rounded.
+            if phone.is(Flags::ROUND) {
+                target[F4] -= 100.;
+            }
+            // F4 higher in retroflex and lateral segments.
+            if phone.is(Flags::RETRO) || phone.is(Flags::LATERAL) {
+                target[F4] += 300.;
+            }
+            // Transitions shorter out of liquids and glides.
+            if prev == Phone::Yy && phone.is(Flags::ROUND) {
+                tcf[F1..=B3].fill(110.);
+            } else if prev.is(Flags::LIQGLIDE) {
+                tcf[F1..=B1 + 1].fill(75.);
+            }
+            if prev.is(Flags::LIQGLIDE) && prev.is(Flags::RETRO) {
+                tcf[F3] = 90.;
+            }
+            // W and Y glides act like sonorants. (The second context is
+            // printed as -yglide.)
+            if prev.is(Flags::WGLIDE) || prev.is(Flags::YGLIDE) {
+                bper[F1..=F3].fill(35.);
+            }
+            // Longer transition between back vowels and palatalized
+            // consonants.
+            if prev.is(Flags::PALATAL) && phone.is(Flags::ROUND) {
+                tcf[F2] += 50.;
+            }
+        }
+        // C.6.2 nonvowel sonorants
+        if opts.on(Rule::Sonorant) && phone.is(Flags::SONORANT) && !phone.is(Flags::VOWEL) {
+            // F2 and F3 coarticulate with the next vowel in RR and LL.
+            let x_sonorant = next_is(Flags::SONORANT) && !next_is(Flags::NASAL);
+            if phone == Phone::Ll {
+                target[AV] -= 3.;
+            }
+            if let Some(nt) = next_target {
+                if phone == Phone::Ll && x_sonorant {
+                    target[F2] = 0.9 * target[F2] + 0.1 * nt[F2];
+                }
+                if phone == Phone::Rr {
+                    // Printed with "Coart(75)", which is not defined.
+                    target[F3] = target[F2] + 250.;
+                }
+                if phone == Phone::Rr && x_sonorant {
+                    target[F2] = 0.75 * target[F2] + 0.25 * nt[F2];
+                }
+                // Coarticulate with schwa if the next segment is
+                // nonsonorant or nasal. (For RR the book prints the next
+                // segment's target, not schwa's.)
+                if phone == Phone::Ll && !x_sonorant {
+                    target[F2] = 0.9 * target[F2] + 0.1 * 1450.;
+                }
+                if phone == Phone::Rr && !x_sonorant {
+                    target[F2] = 0.75 * target[F2] + 0.25 * nt[F2];
+                }
+            }
+            // Transitions shorter into liquids and glides.
+            if !prev.is(Flags::NASAL) && prev.is(Flags::SONORANT) && phone.is(Flags::LATERAL) {
+                bper[F1..=F3].fill(90.);
+            }
+            // Transitions between retroflex and lateral are short.
+            if !phone.is(Flags::LIQGLIDE) {
+                tcf[F1..=B3].fill(90.);
+            } else if prev.is(Flags::LIQGLIDE) {
+                tcf[F1..=B3].fill(50.);
+            } else {
+                tcf[F1..=B3].fill(70.);
+            }
+            if phone.is(Flags::RETRO) {
+                tcf[F3] = 90.;
+            }
+        }
+
+        // C.8.1 fricatives and plosives
         if opts.on(Rule::Obstruent) && (phone.is(Flags::PLOSIVE) || phone.is(Flags::FRICATIVE)) {
             // Devoice unless a vowel follows.
             if phone.is(Flags::VOICED) && !next_is(Flags::VOWEL) {
@@ -578,6 +678,31 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
                 && (!prev.is(Flags::VOICED) || !prev.is(Flags::SONORANT))
             {
                 target[AVC] = 0.;
+            }
+        }
+        // C.8.2 fricatives
+        if opts.on(Rule::Fricative) && phone.is(Flags::FRICATIVE) {
+            if next == Some(Phone::Sil) {
+                target[AF] -= 4.;
+            }
+            // Short fricatives don't reach target, so increase the target.
+            // deltat is not defined; read as 1 ms, giving up to 11 dB.
+            let segdur_af = end.saturating_sub(cumdur[AF]) as f32;
+            if !prev.is(Flags::FRICATIVE)
+                && !prev.is(Flags::STOP)
+                && next_is(Flags::VOWEL)
+                && segdur_af < 80.
+            {
+                target[AF] += (80. - segdur_af) / 7.;
+            }
+            // Stronger voicing between vowels.
+            if prev.is(Flags::VOWEL) && phone.is(Flags::VOICED) && next_is(Flags::VOWEL) {
+                target[AVC] = 60.;
+            }
+            // Palatal fricative rounding before a rounded vowel.
+            if phone.is(Flags::PALATAL) && next_is(Flags::VOWEL) && next_is(Flags::ROUND) {
+                target[F2] -= 50.;
+                target[F3] -= 200.;
             }
         }
         // C.8.3.1: insert a burst at the expense of the closure.
@@ -623,6 +748,16 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
             } else if let Some(t) = tcobst(phone) {
                 tcf[F2..=B3].fill(t);
                 tcf[F1] = 0.5 * (t + 20.);
+            }
+        }
+        // C.8.4 nasals
+        if opts.on(Rule::Nasal) && phone.is(Flags::NASAL) {
+            bper[FNZ] = 100.;
+            trantype[AF..=B3].fill(Trantype::Smodis);
+            trantype[AV] = Trantype::Discon;
+            if !prev.is(Flags::VOICED) {
+                trantype[AV] = Trantype::Dissmo;
+                trantype[AVC] = Trantype::Dissmo;
             }
         }
 
@@ -714,6 +849,72 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
 
         let mut oldval: Pars = std::array::from_fn(|p| tracks.at(p, cumdur[p]));
         oldval[AVC] += oldval_avc_inc;
+
+        // Second (glide) targets of diphthongs, Diptar.
+        let mut glide = vocalic_target_glide(phone).map(|g| g.values());
+
+        // C.7 vowels
+        if opts.on(Rule::Vowel) && phone.is(Flags::VOWEL) {
+            // Heavy forward coarticulation of schwa (from a non-nasal
+            // sonorant two segments back, as in the narrator).
+            if phone == Phone::Axp
+                && i >= 2
+                && segs[i - 2].phone.is(Flags::SONORANT)
+                && !segs[i - 2].phone.is(Flags::NASAL)
+            {
+                let xt = table_target(segs[i - 2].phone, None, opts);
+                target[F2] = 0.5 * (target[F2] + xt[F2]);
+            }
+            if let Some(g) = glide.as_mut() {
+                // No schwa offglide before a velar consonant.
+                if phone.is(Flags::FRONT) && phone.is(Flags::LAX) && next_is(Flags::VELAR) {
+                    g[1] = target[F2];
+                }
+            }
+            // Velarization of front vowels before a lateral (printed twice:
+            // Diptar for diphthongs, and again for nondiphthongs, read as
+            // the target).
+            if (phone.is(Flags::FRONT) || phone.is(Flags::YGLIDE)) && next_is(Flags::LATERAL) {
+                match glide.as_mut() {
+                    Some(g) if phone.is(Flags::DIPHTHONG) => g[1] -= 300.,
+                    _ => target[F2] -= 300.,
+                }
+            }
+            if let Some(g) = glide.as_mut() {
+                // YU fronted before an alveolar plosive.
+                if phone == Phone::Yu && next_is(Flags::ALVEOLAR) && next_is(Flags::PLOSIVE) {
+                    g[1] += 200.;
+                }
+                // Y glide not as dramatic before an alveolar.
+                if phone.is(Flags::YGLIDE) && next_is(Flags::ALVEOLAR) {
+                    g[1] -= 150.;
+                }
+            }
+            // F2 time constant longer in an F2back to round transition.
+            if prev.is(Flags::F2BACK) && phone.is(Flags::ROUND) {
+                tcf[F2] += 50.;
+            }
+            // Schwa takes on formant targets of adjacent segments.
+            if phone.is(Flags::SCHWA)
+                && let Some(nt) = next_target
+            {
+                target[F3] = (oldval[F3] + target[F3] + nt[F3]) / 3.;
+            }
+            // Back cavity resonances assume target quickly.
+            if phone.is(Flags::F2BACK) {
+                tcf[F2] = (tcf[F2] - 20.).max(0.);
+            }
+        }
+        // C.7: formants centralized in a short nonretroflex vowel.
+        if opts.on(Rule::Centralize) && phone.is(Flags::VOWEL) && !phone.is(Flags::RETRO) {
+            let k = (-(seg.dur as f32) / 60.).exp();
+            for (j, c) in [490., 1450., 2500.].into_iter().enumerate() {
+                target[F1 + j] += (c - target[F1 + j]) * k;
+                if let Some(g) = glide.as_mut() {
+                    g[j] += (c - g[j]) * k;
+                }
+            }
+        }
 
         // C.9 adjustments. The rules are written for a consonant followed
         // by a vowel; when the current segment has the higher manner class
@@ -817,6 +1018,57 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
             }
         }
 
+        // C.9.2 all segments (after the manner swap is undone)
+        if opts.on(Rule::CrossLoci) {
+            let alv_stop = prev.is(Flags::ALVEOLAR) && prev.is(Flags::STOP);
+            if alv_stop && phone == Phone::Ww {
+                oldval[F2] = 1200.;
+                oldval[F3] = 2050.;
+                oldval[F4] = 2500.;
+                bper[F4] = 0.;
+                tcf[F4] = 30.;
+            }
+            // Also printed: "Target[f4] ↑ f4", not implemented.
+            if prev.is(Flags::RGLIDE) || prev.is(Flags::RETRO) {
+                if phone.is(Flags::ALVEOLAR) {
+                    target[F2] = 1850.;
+                    target[F3] = 2200.;
+                }
+                if phone.is(Flags::VELAR) {
+                    target[F2] = 1700.;
+                    target[F3] = 1900.;
+                }
+            }
+            if phone.is(Flags::RETRO) {
+                if prev.is(Flags::VELAR) {
+                    oldval[F2] = 1100.;
+                    oldval[F3] = 1500.;
+                }
+                if prev.is(Flags::ALVEOLAR) {
+                    oldval[F3] = 2100.;
+                }
+                if prev.is(Flags::LABIAL) {
+                    oldval[F3] = 1700.;
+                }
+            }
+            if phone.is(Flags::VELAR) {
+                if prev.is(Flags::WGLIDE) {
+                    target[F2] = 900.;
+                    target[F3] = 2000.;
+                } else if opts.on(Rule::VelarF2)
+                    && !prev.is(Flags::RGLIDE)
+                    && !prev.is(Flags::RETRO)
+                {
+                    // Printed as a plain ELSE, which would also undo the
+                    // retroflex rule above.
+                    target[F2] = 1900.;
+                }
+            }
+            if alv_stop && phone.is(Flags::F2BACK) {
+                oldval[F2] = 1850.;
+            }
+        }
+
         // C.10 modifications (segment-specific parts, before the boundary
         // values).
         let mods = opts.on(Rule::Modifications);
@@ -891,7 +1143,6 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
         }
 
         // C.7.1 diphthong rules
-        let glide = vocalic_target_glide(phone).map(|g| g.values());
         let dip = match (glide, diphthong_params(phone)) {
             (Some(diptar), Some((tcdiph, tdmid))) if phone.is(Flags::DIPHTHONG) => {
                 let segdur = (end - cumdur[F1]) as f32;

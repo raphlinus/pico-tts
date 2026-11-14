@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Compare letter-to-sound output against CMUdict.
 
-Usage: cmucheck.py BIN CMUDICT OUT.tsv [TEXT...]
+Usage: cmucheck.py BIN CMUDICT OUT.tsv [TEXT...] [--freq=FILE [--top=N]]
+
+With --freq, checks the N (default 20000) most frequent words of a
+word<TAB>count list, weighted by count. Norvig's count_1w.txt
+(https://norvig.com/ngrams/count_1w.txt) works.
 
 CMUDICT is cmudict.dict from https://github.com/cmusphinx/cmudict
 
@@ -147,6 +151,15 @@ def run(binary, words):
 def main():
     binary, cmu_path, out = sys.argv[1:4]
     texts = sys.argv[4:]
+    freq = None
+    for a in list(texts):
+        if a.startswith('--freq='):
+            freq = a[len('--freq='):]
+            texts.remove(a)
+        elif a.startswith('--top='):
+            top = int(a[len('--top='):])
+            texts.remove(a)
+    top = locals().get('top', 20000)
     cmu = collections.defaultdict(list)
     for line in open(cmu_path, encoding='latin-1'):
         if line.startswith(';;;'):
@@ -157,7 +170,20 @@ def main():
         w = re.sub(r'\(\d+\)$', '', parts[0])
         if w.isalpha():
             cmu[w.lower()].append(parts[1:])
-    if texts:
+    if freq:
+        # Word<TAB>count lines, most frequent first (e.g. Norvig's
+        # count_1w.txt). Takes the first `top` words that CMUdict has.
+        counts = collections.Counter()
+        for line in open(freq):
+            w, c = line.split()
+            # Skip letters and abbreviations (pm, dvd), which are spelled.
+            if len(w) == 1 and w not in 'ai' or not re.search('[aeiouy]', w):
+                continue
+            if w in cmu:
+                counts[w] = int(c)
+                if len(counts) >= top:
+                    break
+    elif texts:
         counts = collections.Counter()
         for t in texts:
             for w in re.findall(r"[A-Za-z]+(?:'[a-z]+)?", open(t).read()):

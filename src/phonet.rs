@@ -125,6 +125,11 @@ pub enum Rule {
     /// plosive, so the burst is shaped by the plosive's own formants rather
     /// than the next segment's (fixes "drove" heard as "grove").
     ReleaseHold,
+    /// From the narrator (not in the book): affricates always get a burst,
+    /// and it is the frication of the affricate, CH 70 ms and JJ 60 ms (120
+    /// and 80 ms when stressed). Table C-7's CH 15 and JJ 10 make CH
+    /// almost silent.
+    Affricate,
 }
 
 /// How to read the final ELSE rule of C.5.
@@ -757,9 +762,19 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
         let burst = if opts.on(Rule::Burst)
             && phone.is(Flags::PLOSIVE)
             && phone != Phone::Qq
-            && next.is_some_and(|n| !n.is(Flags::STOP) && n != Phone::Sil)
+            && (next.is_some_and(|n| !n.is(Flags::STOP) && n != Phone::Sil)
+                || (opts.on(Rule::Affricate) && phone.is(Flags::AFFRICATE)))
         {
             let mut bd = burdur(phone).unwrap_or(0);
+            if opts.on(Rule::Affricate) && phone.is(Flags::AFFRICATE) {
+                let stressed = seg.stressed && next != Some(Phone::Rr);
+                bd = match (phone == Phone::Jj, stressed) {
+                    (false, false) => 70,
+                    (false, true) => 120,
+                    (true, false) => 60,
+                    (true, true) => 80,
+                };
+            }
             if phone == Phone::Tt && next_is(Flags::RETRO) {
                 bd += 10;
             }
@@ -855,8 +870,13 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
             if prev.is(Flags::PLOSIVE)
                 && let Some(bd) = prev_burdur
             {
-                // Aspiration starts during the burst.
-                let shift = bd as i32 - 5;
+                // Aspiration starts during the burst. (Not during the long
+                // frication of an affricate.)
+                let shift = if opts.on(Rule::Affricate) && prev.is(Flags::AFFRICATE) {
+                    0
+                } else {
+                    bd as i32 - 5
+                };
                 for p in [ASP, AV, AVC, B1] {
                     cumdur[p] = if opts.on(Rule::AspBurstLiteral) {
                         (cumdur[p] as i32 + shift) as u32

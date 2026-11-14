@@ -61,6 +61,9 @@ pub enum Rule {
     Tcobst,
     /// C.5: amplitude and formant transition types (the final rule pair).
     AmpTrantype,
+    /// C.7.1: diphthong transition smoothing (table C-5, figure C-2).
+    /// Otherwise diphthongs glide linearly over the whole segment.
+    Diphthong,
 }
 
 /// How to read the final ELSE rule of C.5.
@@ -75,12 +78,24 @@ pub enum AmpElse {
     Literal,
 }
 
+/// Units of Tcdiph in table C-5.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum DipUnits {
+    /// 0.1 ms, giving half-widths of roughly 10 to 50 ms.
+    #[default]
+    Tenth,
+    /// ms, taking the printed formula literally. Half-widths then usually
+    /// exceed the segment, so the glide spans the whole vowel.
+    Ms,
+}
+
 /// Options controlling rendering, mostly for ablation.
 #[derive(Clone, Debug)]
 pub struct Options {
     /// Rules switched off.
     pub disabled: Vec<Rule>,
     pub amp_else: AmpElse,
+    pub dip_units: DipUnits,
     pub voicing: Voicing,
     /// Raise the nasal zero to 450 Hz in nasals (C.4, C.8.4). Otherwise it
     /// stays at 250 Hz, cancelling the nasal pole.
@@ -98,6 +113,44 @@ impl Options {
 
 /// C.4
 const ASPAMP: f32 = 51.;
+
+/// Table C-5: diphthong transition parameters (Tcdiph, Tdmid).
+fn diphthong_params(phone: Phone) -> Option<(f32, f32)> {
+    use Phone::*;
+    Some(match phone {
+        Aa => (0., 80.),
+        Ae => (100., 75.),
+        Ah => (0., 0.),
+        Ao => (110., 80.),
+        Aw => (120., 70.),
+        Axr => (125., 40.),
+        Ay => (100., 55.),
+        Eh => (60., 70.),
+        Er => (180., 50.),
+        Exr => (100., 50.),
+        Ey => (140., 55.),
+        Ih => (90., 65.),
+        Ixr => (100., 50.),
+        Iy => (200., 45.),
+        Ow => (150., 50.),
+        Oxr => (110., 60.),
+        Oy => (150., 60.),
+        Uh => (90., 65.),
+        Uw => (140., 55.),
+        Uxr => (150., 50.),
+        Yu => (100., 45.),
+        _ => return None,
+    })
+}
+
+struct DipState {
+    /// Time of the center of the transition, from Cumdur, for f1..f3.
+    tcenter: [f32; 3],
+    /// Half-width of the transition.
+    tcdips: f32,
+    /// Boundary value at the center, for f1..f3.
+    bval: [f32; 3],
+}
 
 /// Table C-6: duration of forward smoothing for obstruents (Tcobst), in ms.
 fn tcobst(phone: Phone) -> Option<f32> {
@@ -458,8 +511,47 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
         });
         let bvalb = bvalf;
 
-        // Draw all parameter tracks (figure 11-6).
+        // C.7.1 diphthong rules
         let glide = vocalic_target_glide(phone).map(|g| g.values());
+        let dip = match (glide, diphthong_params(phone)) {
+            (Some(diptar), Some((tcdiph, tdmid))) if phone.is(Flags::DIPHTHONG) => {
+                let segdur = (end - cumdur[F1]) as f32;
+                let mut tcenter = [tdmid / 100. * segdur; 3];
+                let tcdips = match opts.dip_units {
+                    DipUnits::Tenth => tcdiph / 10.,
+                    DipUnits::Ms => tcdiph,
+                } * 0.5
+                    * (1. + segdur / 45.);
+                // Earlier diphthongization after HH (printed as +lax, though
+                // the comment says tense vowels).
+                if prev == Phone::Hh && phone.is(Flags::LAX) {
+                    tcenter.iter_mut().for_each(|t| *t *= 0.67);
+                }
+                let mut bval: [f32; 3] =
+                    std::array::from_fn(|k| 0.5 * (target[F1 + k] + diptar[k]));
+                if phone == Phone::Oy {
+                    bval[0] += 70.;
+                }
+                if matches!(phone, Phone::Ay | Phone::Oy) {
+                    bval[1] += 200.;
+                    bval[2] -= 200.;
+                }
+                if phone == Phone::Yu {
+                    tcenter[2] *= 0.3;
+                }
+                if matches!(phone, Phone::Exr | Phone::Ixr) {
+                    tcenter[2] *= 0.6;
+                }
+                Some(DipState {
+                    tcenter,
+                    tcdips,
+                    bval,
+                })
+            }
+            _ => None,
+        };
+
+        // Draw all parameter tracks (figure 11-6).
         for p in 0..N_PAR {
             let t1 = cumdur[p];
             if matches!(trantype[p], Trantype::Setsmo | Trantype::Smodis) {
@@ -479,15 +571,35 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
             } else {
                 tracks.hold(p, t1, target[p]);
             }
-            // Diphthong placeholder: add a linear glide toward the second
-            // target over the course of the segment.
             if let Some(glide) = glide
                 && (F1..=F3).contains(&p)
             {
-                let delta = glide[p - F1] - target[p];
-                for t in t1..=end.min(total) {
-                    let u = (t - t1) as f32 / (end - t1) as f32;
-                    tracks.v[t as usize][p] += delta * u;
+                let diptar = glide[p - F1];
+                if let Some(dip) = dip.as_ref().filter(|_| opts.on(Rule::Diphthong)) {
+                    // C.7.1: draw a SETSMO transition from Target to Diptar
+                    // centered at Cumdur + Tcenter (figure C-2).
+                    let k = p - F1;
+                    let tc = t1 + dip.tcenter[k].round() as u32;
+                    let tcdips = dip.tcdips.round() as u32;
+                    let tb = tc.saturating_sub(tcdips).max(t1);
+                    tracks.line(p, tb, tracks.at(p, tb), tc, dip.bval[k]);
+                    let tf = tc + tcdips;
+                    if tf > end {
+                        let u = (end - tc) as f32 / (tf - tc).max(1) as f32;
+                        let v_end = dip.bval[k] + (diptar - dip.bval[k]) * u;
+                        tracks.line(p, tc, dip.bval[k], end, v_end);
+                    } else {
+                        tracks.line(p, tc, dip.bval[k], tf, diptar);
+                        tracks.hold(p, tf, diptar);
+                    }
+                } else {
+                    // Placeholder: add a linear glide toward the second
+                    // target over the course of the segment.
+                    let delta = diptar - target[p];
+                    for t in t1..=end.min(total) {
+                        let u = (t - t1) as f32 / (end - t1) as f32;
+                        tracks.v[t as usize][p] += delta * u;
+                    }
                 }
             }
             let end_val = tracks.at(p, end);

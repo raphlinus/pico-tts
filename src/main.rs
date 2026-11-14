@@ -104,6 +104,9 @@ struct PhonetCmd {
     /// Reading of the final ELSE rule in C.5
     #[arg(long, value_enum, default_value_t)]
     amp_else: phonet::AmpElse,
+    /// Units of Tcdiph in table C-5
+    #[arg(long, value_enum, default_value_t)]
+    dip_units: phonet::DipUnits,
     /// Disable smoothing between segments (all transitions DISCON)
     #[arg(long)]
     no_smooth: bool,
@@ -375,6 +378,7 @@ fn main_phonet(args: PhonetCmd) {
         &phonet::Options {
             disabled: args.disable.clone(),
             amp_else: args.amp_else,
+            dip_units: args.dip_units,
             voicing: args.voicing,
             nasal_zero: !args.no_nasal_zero,
             smooth: !args.no_smooth,

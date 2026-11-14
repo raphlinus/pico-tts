@@ -62,6 +62,7 @@ pub fn prosod(
     text: &str,
     f0_consts: F0Consts,
     f0_head: Option<f32>,
+    f0_left_final: bool,
 ) -> Result<Vec<Annotated>, String> {
     let mut segs: Vec<Seg> = vec![];
     let mut words: Vec<Word> = vec![];
@@ -307,7 +308,7 @@ pub fn prosod(
             });
         }
     }
-    f0::assign(&syls, &mut out, f0_consts, f0_head);
+    f0::assign(&syls, &mut out, f0_consts, f0_head, f0_left_final);
     Ok(out)
 }
 

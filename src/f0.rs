@@ -155,7 +155,13 @@ fn glottal(phone: Phone) -> bool {
 
 /// Compute F0 targets and store them in the segments.
 /// `head` overrides the computed head peak of every clause.
-pub fn assign(syls: &[Syl], out: &mut [Annotated], consts: F0Consts, head: Option<f32>) {
+pub fn assign(
+    syls: &[Syl],
+    out: &mut [Annotated],
+    consts: F0Consts,
+    head: Option<f32>,
+    left_final: bool,
+) {
     let mut c = consts.get();
     c.head_override = head;
     let mut v = vec![Values::default(); syls.len()];
@@ -169,7 +175,7 @@ pub fn assign(syls: &[Syl], out: &mut [Annotated], consts: F0Consts, head: Optio
             lo = k + 1;
         }
     }
-    place(syls, &v, out);
+    place(syls, &v, out, left_final);
 }
 
 fn clause(syls: &[Syl], out: &[Annotated], c: &Consts, n_clause: usize, v: &mut [Values]) {
@@ -472,7 +478,7 @@ fn final_fall(syls: &[Syl], v: &mut [Values], c: &Consts, tune_a: bool, last_as:
 }
 
 /// Place start, peak and end values on segments (phonetf0.c).
-fn place(syls: &[Syl], v: &[Values], out: &mut [Annotated]) {
+fn place(syls: &[Syl], v: &[Values], out: &mut [Annotated], left_final: bool) {
     let mut targets: Vec<(usize, f32, f32)> = vec![];
     for (k, s) in syls.iter().enumerate() {
         let val = &v[k];
@@ -503,7 +509,16 @@ fn place(syls: &[Syl], v: &[Values], out: &mut [Annotated]) {
         let next_syl_start = nuc == s.last;
         let after_vl_plosive =
             nuc > 0 && phone(nuc - 1).is(Flags::PLOSIVE) && !voiced(phone(nuc - 1));
-        let peak_pos = if after_vl_plosive || phrase_final {
+        // The narrator puts the peak of every phrase-final syllable at its
+        // left edge. For an unaccented one that replaces the start value,
+        // so F0 steps down to the terminal value at the vowel onset. Unless
+        // `left_final` is set, an unaccented phrase-final peak goes to the
+        // middle instead, and F0 falls through the syllable.
+        // (The same goes for the left-edge peak after a voiceless plosive.)
+        let smooth_final = phrase_final && !s.accented && !left_final;
+        let peak_pos = if smooth_final {
+            0.5
+        } else if after_vl_plosive || phrase_final {
             0.
         } else if s.accented && !next_syl_start {
             1.

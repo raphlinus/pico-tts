@@ -130,6 +130,10 @@ struct PhonetCmd {
     /// Override the head peak (first accent) of each clause, in Hz
     #[arg(long)]
     f0_head: Option<f32>,
+    /// Put the F0 peak of an unaccented phrase-final syllable at its left
+    /// edge, as the narrator does (F0 steps down at the vowel onset)
+    #[arg(long)]
+    f0_left_final: bool,
     /// Output gain in dB
     #[arg(long, default_value = "0")]
     gain: f32,
@@ -393,7 +397,7 @@ fn main_phonet(args: PhonetCmd) {
     // PHONO2 input (with C:/F: word markers) gets durations from the
     // chapter 9 rules; otherwise the input gives them directly.
     let segs = if text.split_whitespace().any(|t| t == "C:" || t == "F:") {
-        match prosod::prosod(&text, args.f0_consts, args.f0_head) {
+        match prosod::prosod(&text, args.f0_consts, args.f0_head, args.f0_left_final) {
             Ok(ann) => {
                 for a in &ann {
                     let f0: Vec<String> = a

@@ -116,6 +116,9 @@ struct PhonetCmd {
     /// Units of Tcdiph in table C-5
     #[arg(long, value_enum, default_value_t)]
     dip_units: phonet::DipUnits,
+    /// Velar F2 locus rule in C.9.1
+    #[arg(long, value_enum, default_value_t)]
+    velar_locus: phonet::VelarLocus,
     /// Disable smoothing between segments (all transitions DISCON)
     #[arg(long)]
     no_smooth: bool,
@@ -447,6 +450,7 @@ fn main_phonet(args: PhonetCmd) {
             enabled: args.enable.clone(),
             amp_else: args.amp_else,
             dip_units: args.dip_units,
+            velar_locus: args.velar_locus,
             voicing: args.voicing,
             nasal_zero: !args.no_nasal_zero,
             smooth: !args.no_smooth,

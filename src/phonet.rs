@@ -144,6 +144,19 @@ pub enum DipUnits {
     Narrator,
 }
 
+/// How to compute the velar F2 locus in C.9.1.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum VelarLocus {
+    /// As printed: F2 = T2 + (T1 - 300) * 2, and KP's targets next to a
+    /// front vowel or AA.
+    #[default]
+    Book,
+    /// As printed, but AA uses the formula rather than KP's front locus.
+    NoAa,
+    /// The narrator: F2 = T2 + T1 - 300, never KP's targets.
+    Narrator,
+}
+
 /// Options controlling rendering, mostly for ablation.
 #[derive(Clone, Debug)]
 pub struct Options {
@@ -153,6 +166,7 @@ pub struct Options {
     pub enabled: Vec<Rule>,
     pub amp_else: AmpElse,
     pub dip_units: DipUnits,
+    pub velar_locus: VelarLocus,
     pub voicing: Voicing,
     /// Raise the nasal zero to 450 Hz in nasals (C.4, C.8.4). Otherwise it
     /// stays at 250 Hz, cancelling the nasal pole.
@@ -984,9 +998,15 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
                 if last.is(Flags::VELAR) {
                     // The velar F2 locus follows the vowel: F1 for the
                     // lip-rounding and F2 for the fronting part.
-                    ov[F2] = tg[F2] + (tg[F1] - 300.) * 2.;
+                    let k = if opts.velar_locus == VelarLocus::Narrator { 1. } else { 2. };
+                    ov[F2] = tg[F2] + (tg[F1] - 300.) * k;
                     ov[F3] = ov[F2] + if cur.is(Flags::LABIAL) { 800. } else { 400. };
-                    if cur.is(Flags::FRONT) || cur == Phone::Aa {
+                    let kp = match opts.velar_locus {
+                        VelarLocus::Book => cur.is(Flags::FRONT) || cur == Phone::Aa,
+                        VelarLocus::NoAa => cur.is(Flags::FRONT),
+                        VelarLocus::Narrator => false,
+                    };
+                    if kp {
                         // Printed "KP-target[f2,f4]"; read as f2, f3.
                         let kp = table_target(Phone::Kp, None, opts);
                         ov[F2] = kp[F2];

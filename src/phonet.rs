@@ -149,7 +149,6 @@ pub enum DipUnits {
 pub enum VelarLocus {
     /// As printed: F2 = T2 + (T1 - 300) * 2, and KP's targets next to a
     /// front vowel or AA.
-    #[default]
     Book,
     /// As printed, but AA uses the formula rather than KP's front locus.
     NoAa,
@@ -157,7 +156,9 @@ pub enum VelarLocus {
     Narrator,
     /// As printed, but only for a velar before the vowel. Going from a
     /// vowel into a velar, the C.9.1 F2 and F3 rules are skipped, so the
-    /// boundary uses the default Bper and the velar's table target.
+    /// boundary uses the default Bper and the velar's table target. The
+    /// printed rule makes "rocker" sound like "wrecker".
+    #[default]
     CvOnly,
 }
 

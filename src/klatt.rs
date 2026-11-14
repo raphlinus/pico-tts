@@ -34,6 +34,11 @@ pub struct Klatt {
     impuls_s: f32,
     pulse_period: usize,
     pulse_phase: usize,
+    /// Impulse amplitudes latched at the start of the current pulse, so that
+    /// the second (negative) half of the doublet matches the first even when
+    /// the parameters change between the two samples. Otherwise the doublet
+    /// leaves a DC step, which the low-pass AVS branch turns into a thump.
+    pulse_amp: (f32, f32),
     noise: Noise,
     aaspir: f32,
     afric: f32,
@@ -194,11 +199,12 @@ impl Klatt {
         }
         if self.pulse_phase < 2 {
             if self.pulse_phase == 0 {
+                self.pulse_amp = (self.impuls, self.impuls_s);
                 input = self.impuls;
                 input_s = self.impuls_s;
             } else {
-                input = -self.impuls;
-                input_s = -self.impuls_s;
+                input = -self.pulse_amp.0;
+                input_s = -self.pulse_amp.1;
             }
         }
         let ygp = self.rgp.process(input);

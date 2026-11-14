@@ -134,6 +134,9 @@ struct PhonetCmd {
     /// edge, as the narrator does (F0 steps down at the vowel onset)
     #[arg(long)]
     f0_left_final: bool,
+    /// Print the synthesizer parameters of every frame to stderr
+    #[arg(long)]
+    dump: bool,
     /// Output gain in dB
     #[arg(long, default_value = "0")]
     gain: f32,
@@ -436,6 +439,7 @@ fn main_phonet(args: PhonetCmd) {
     let gain = 16384. * 10f32.powf(args.gain / 20.);
     let mut peak = 0f32;
     let mut n_clip = 0;
+    let mut frame_t = 0;
     for klatt_params in phonet::render(
         &segs,
         &phonet::Options {
@@ -449,6 +453,14 @@ fn main_phonet(args: PhonetCmd) {
             f0_beta: args.f0_beta,
         },
     ) {
+        if args.dump {
+            let p = &klatt_params;
+            eprintln!(
+                "{:>6} f0 {:4.0} av {:3.0} avs {:3.0} ah {:3.0} af {:3.0} a2-6 {:3.0} {:3.0} {:3.0} {:3.0} {:3.0} ab {:3.0} f1-4 {:4.0} {:4.0} {:4.0} {:4.0} b1-3 {:3.0} {:3.0} {:3.0} fnz {:3.0}",
+                frame_t, p.f0, p.av, p.avs, p.ah, p.af, p.a2, p.a3, p.a4, p.a5, p.a6, p.ab, p.f1, p.f2, p.f3, p.f4, p.b1, p.b2, p.b3, p.fnz
+            );
+            frame_t += phonet::FRAME_TIME;
+        }
         klatt.set(&klatt_params);
         for _ in 0..samples_per_frame {
             let y = klatt.process() * gain;

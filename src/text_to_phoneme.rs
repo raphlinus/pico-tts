@@ -798,6 +798,154 @@ fn ipa_to_segs(ipa: &str) -> Result<Vec<Seg>, String> {
     Ok(out)
 }
 
+/// Suffixes that are neutral to stress, with their syllable counts. They
+/// are stripped (repeatedly) before the stress-determining suffixes are
+/// looked for.
+const NEUTRAL_SUFFIXES: &[(&str, usize)] = &[
+    ("ings", 1),
+    ("ing", 1),
+    ("ments", 1),
+    ("ment", 1),
+    ("ness", 1),
+    ("fully", 2),
+    ("ful", 1),
+    ("less", 1),
+    ("ly", 1),
+    ("ers", 1),
+    ("er", 1),
+];
+
+/// Where a suffix puts the stress, counting syllables of the stem from its
+/// end (1 is the last syllable before the suffix).
+#[derive(Clone, Copy)]
+enum SuffixStress {
+    /// The syllable just before the suffix (-tion, -ic, -ity).
+    Before,
+    /// Two syllables before the suffix's own syllable when the stem has at
+    /// least three, else the first (-ate, -ize, -ous).
+    Antepenult,
+    /// The first syllable of the suffix (-ation, -ee, -eer, -ese).
+    Final,
+}
+
+/// Stress-determining suffixes, with their syllable counts.
+const STRESS_SUFFIXES: &[(&str, usize, SuffixStress)] = &[
+    ("ations", 2, SuffixStress::Final),
+    ("ation", 2, SuffixStress::Final),
+    ("itions", 2, SuffixStress::Final),
+    ("ition", 2, SuffixStress::Final),
+    ("tions", 1, SuffixStress::Before),
+    ("tion", 1, SuffixStress::Before),
+    ("sions", 1, SuffixStress::Before),
+    ("sion", 1, SuffixStress::Before),
+    ("cian", 1, SuffixStress::Before),
+    ("cial", 1, SuffixStress::Before),
+    ("tial", 1, SuffixStress::Before),
+    ("cious", 1, SuffixStress::Before),
+    ("tious", 1, SuffixStress::Before),
+    ("ically", 3, SuffixStress::Before),
+    ("ical", 2, SuffixStress::Before),
+    ("ics", 1, SuffixStress::Before),
+    ("ic", 1, SuffixStress::Before),
+    ("ities", 2, SuffixStress::Before),
+    ("ity", 2, SuffixStress::Before),
+    ("ety", 2, SuffixStress::Before),
+    ("ify", 2, SuffixStress::Before),
+    ("ified", 2, SuffixStress::Before),
+    ("ating", 2, SuffixStress::Antepenult),
+    ("ated", 2, SuffixStress::Antepenult),
+    ("ates", 1, SuffixStress::Antepenult),
+    ("ate", 1, SuffixStress::Antepenult),
+    ("izing", 2, SuffixStress::Antepenult),
+    ("ized", 1, SuffixStress::Antepenult),
+    ("izes", 2, SuffixStress::Antepenult),
+    ("ize", 1, SuffixStress::Antepenult),
+    ("ous", 1, SuffixStress::Antepenult),
+    ("ees", 1, SuffixStress::Final),
+    ("ee", 1, SuffixStress::Final),
+    ("eers", 1, SuffixStress::Final),
+    ("eer", 1, SuffixStress::Final),
+    ("ese", 1, SuffixStress::Final),
+    ("ette", 1, SuffixStress::Final),
+];
+
+/// Unstressed prefixes (when the rules give them a reduced or lax vowel).
+const UNSTRESSED_PREFIXES: &[&str] = &[
+    "be", "de", "re", "pre", "con", "com", "ex", "en", "em", "a",
+];
+
+/// Put primary stress on a content word that has none from the
+/// dictionary, using affix rules: stress-determining suffixes (after
+/// stripping stress-neutral ones), otherwise the first syllable after an
+/// unstressed prefix, otherwise the first full vowel.
+fn assign_stress(word: &str, segs: &mut [Seg]) {
+    let syl: Vec<usize> = (0..segs.len())
+        .filter(|&k| segs[k].vowel || segs[k].c == 'L')
+        .collect();
+    let n = syl.len();
+    if n == 0 {
+        return;
+    }
+    let mut chosen = None;
+    // Strip stress-neutral suffixes.
+    let mut stem = word;
+    let mut m = n;
+    'strip: loop {
+        for &(suf, k) in NEUTRAL_SUFFIXES {
+            if stem.len() > suf.len() + 2 && stem.ends_with(suf) && m > k {
+                stem = &stem[..stem.len() - suf.len()];
+                m -= k;
+                continue 'strip;
+            }
+        }
+        break;
+    }
+    for &(suf, k, rule) in STRESS_SUFFIXES {
+        if stem.len() > suf.len() && stem.ends_with(suf) && m > k {
+            let before = m - k; // syllables before the suffix
+            chosen = match rule {
+                SuffixStress::Before => Some(before - 1),
+                SuffixStress::Antepenult if before >= 2 => Some(before - 2),
+                SuffixStress::Antepenult => Some(0),
+                SuffixStress::Final => Some(before),
+            };
+            break;
+        }
+    }
+    if chosen.is_none() && n >= 2 {
+        let first = segs[syl[0]].c;
+        let lax = matches!(first, 'x' | 'I' | 'i' | 'E');
+        let prefix = UNSTRESSED_PREFIXES
+            .iter()
+            .find(|p| word.len() > p.len() + 2 && word.starts_with(**p));
+        let unstressed = match prefix {
+            // "a-" only when the rules already reduced it (about, along).
+            Some(&"a") => first == 'x',
+            // con-, com- in longer words (consider, computer, but common).
+            Some(&("con" | "com")) => lax || n >= 3,
+            Some(_) => lax,
+            None => false,
+        };
+        if unstressed {
+            chosen = Some(1);
+        }
+    }
+    let k = match chosen {
+        Some(c) => syl[c.min(n - 1)],
+        None => segs
+            .iter()
+            .position(|s| s.vowel && s.c != 'x')
+            .unwrap_or(syl[0]),
+    };
+    // Never stress syllabic L; move to a neighboring vowel.
+    let k = if segs[k].c == 'L' {
+        segs[..k].iter().rposition(|s| s.vowel).unwrap_or(k)
+    } else {
+        k
+    };
+    segs[k].stress = 1;
+}
+
 impl TextToPhoneme {
     /// Translate text to the ASCII phoneme format read by [`crate::ascii`],
     /// with word markers, stress and phrase boundaries.
@@ -862,13 +1010,7 @@ impl TextToPhoneme {
             if function {
                 segs.iter_mut().for_each(|s| s.stress = 0);
             } else if !segs.iter().any(|s| s.stress == 1) {
-                let first = segs
-                    .iter()
-                    .position(|s| s.vowel && s.c != 'x')
-                    .or_else(|| segs.iter().position(|s| s.vowel));
-                if let Some(k) = first {
-                    segs[k].stress = 1;
-                }
+                assign_stress(&t, &mut segs);
             }
             toks.push(Tok::Word(Word { function, segs }));
         }

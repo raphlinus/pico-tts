@@ -263,8 +263,8 @@ fn clause(syls: &[Syl], out: &[Annotated], c: &Consts, n_clause: usize, v: &mut 
         w.len()
     };
     let n_phr = ((words + 4) / 3) as f32;
-    let head = HEAD_BASE + n_phr * (HEAD_PER_PHRASE - 2. * n_clause as f32).max(0.)
-        - 8. * n_clause as f32;
+    let head =
+        HEAD_BASE + n_phr * (HEAD_PER_PHRASE - 2. * n_clause as f32).max(0.) - 8. * n_clause as f32;
     let head = c
         .head_override
         .unwrap_or_else(|| head.clamp(c.head_min, c.head_max));
@@ -278,7 +278,11 @@ fn clause(syls: &[Syl], out: &[Annotated], c: &Consts, n_clause: usize, v: &mut 
     let mut p = head;
     for (i, &k) in accents.iter().enumerate() {
         if i > 0 {
-            p -= if i == 1 || i + 1 == n_as { larger } else { smaller };
+            p -= if i == 1 || i + 1 == n_as {
+                larger
+            } else {
+                smaller
+            };
         }
         v[k].peak = p;
     }
@@ -493,7 +497,11 @@ fn place(syls: &[Syl], v: &[Values], out: &mut [Annotated], left_final: bool) {
         // Start, on the first voiced segment.
         if let Some(i) = (s.first..=nuc).find(|&i| voiced(phone(i))) {
             let after_glottal = i > 0 && glottal(phone(i - 1));
-            let start = if after_glottal { AFTER_GLOTTAL } else { val.start };
+            let start = if after_glottal {
+                AFTER_GLOTTAL
+            } else {
+                val.start
+            };
             if i == nuc {
                 put(i, 0., start);
             } else if after_glottal {
@@ -534,7 +542,10 @@ fn place(syls: &[Syl], v: &[Values], out: &mut [Annotated], left_final: bool) {
                 put(nuc + 1, 0.5, val.end);
             }
         } else {
-            let last_voiced = (nuc..=s.last).rev().find(|&i| voiced(phone(i))).unwrap_or(nuc);
+            let last_voiced = (nuc..=s.last)
+                .rev()
+                .find(|&i| voiced(phone(i)))
+                .unwrap_or(nuc);
             if val.cr > 0. {
                 put(nuc, 0.5, val.end);
                 put(last_voiced, 1., val.end + val.cr);

@@ -151,7 +151,9 @@ impl PulseShaper {
             self.drift = self.rho * self.drift + (1.0 - self.rho * self.rho).sqrt() * u;
             let sd = self.sigma * (1.0 + self.spread * self.drift.clamp(-1.0, 1.0));
             let n = (4.0 * sd).ceil() as isize;
-            let norm: f32 = (-n..=n).map(|j| (-0.5 * (j as f32 / sd).powi(2)).exp()).sum();
+            let norm: f32 = (-n..=n)
+                .map(|j| (-0.5 * (j as f32 / sd).powi(2)).exp())
+                .sum();
             let len = self.ring.len();
             for j in -n..=n {
                 let g = (-0.5 * (j as f32 / sd).powi(2)).exp() / norm;
@@ -352,7 +354,11 @@ impl Klatt {
         if let Some(ps) = &mut self.pulses {
             // Shape the impulse, then take the first difference, so that
             // both halves of the doublet share one pulse width.
-            let imp = if self.pulse_phase == 0 { self.pulse_amp.0 } else { 0.0 };
+            let imp = if self.pulse_phase == 0 {
+                self.pulse_amp.0
+            } else {
+                0.0
+            };
             let y = ps.process(imp);
             input = y - ps.last;
             ps.last = y;

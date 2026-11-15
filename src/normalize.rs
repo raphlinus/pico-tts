@@ -111,14 +111,30 @@ pub const WORDS: &[(&str, &str)] = &[
 
 /// Letter names in ASCII phonemes, a to z, for spelled acronyms.
 pub const LETTERS: [&str; 26] = [
-    "'e", "b'i", "s'i", "d'i", "'i", "'Ef", "J'i", "'eC", "'A", "J'e", "k'e", "'El", "'Em",
-    "'En", "'o", "p'i", "ky'u", "'ar", "'Es", "t'i", "y'u", "v'i", "d'^bxlyu", "'Eks", "w'A",
-    "z'i",
+    "'e", "b'i", "s'i", "d'i", "'i", "'Ef", "J'i", "'eC", "'A", "J'e", "k'e", "'El", "'Em", "'En",
+    "'o", "p'i", "ky'u", "'ar", "'Es", "t'i", "y'u", "v'i", "d'^bxlyu", "'Eks", "w'A", "z'i",
 ];
 
 const ONES: [&str; 20] = [
-    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-    "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
     "nineteen",
 ];
 const TENS: [&str; 10] = [
@@ -410,7 +426,9 @@ pub fn normalize(text: &str) -> Vec<Token> {
             }
             // Acronyms: all capitals, perhaps with a plural or possessive s.
             let (stem, s) = match w.strip_suffix('s') {
-                Some(st) if st.len() >= 2 && st.chars().all(|c| c.is_ascii_uppercase()) => (st, true),
+                Some(st) if st.len() >= 2 && st.chars().all(|c| c.is_ascii_uppercase()) => {
+                    (st, true)
+                }
                 _ => (w.as_str(), false),
             };
             let caps = stem.len() >= 2 && stem.chars().all(|c| c.is_ascii_uppercase());
@@ -496,7 +514,11 @@ fn number(cs: &[char], mut i: usize, out: &mut Out) -> usize {
         }
         // The first group has 1 to 3 digits, later ones exactly 3.
         if at(i) == ','
-            && (if commas { true } else { (1..=3).contains(&int.len()) })
+            && (if commas {
+                true
+            } else {
+                (1..=3).contains(&int.len())
+            })
             && (1..=3).all(|k| at(i + k).is_ascii_digit())
             && !at(i + 4).is_ascii_digit()
         {
@@ -538,7 +560,10 @@ fn number(cs: &[char], mut i: usize, out: &mut Out) -> usize {
             }
             groups.push(j - k);
         }
-        if groups.len() >= 2 && groups[1..].iter().all(|g| *g >= 3) && groups.iter().sum::<usize>() >= 7 {
+        if groups.len() >= 2
+            && groups[1..].iter().all(|g| *g >= 3)
+            && groups.iter().sum::<usize>() >= 7
+        {
             for (g, chunk) in cs[start..j].split(|c| *c == '-').enumerate() {
                 if g > 0 {
                     out.punct(',');
@@ -598,7 +623,10 @@ fn number(cs: &[char], mut i: usize, out: &mut Out) -> usize {
         _ => {}
     }
     if let Some((one, many, sub_one, sub_many)) = currency {
-        let cents = frac.as_ref().filter(|f| f.len() == 2).map(|f| f.parse::<u64>().unwrap());
+        let cents = frac
+            .as_ref()
+            .filter(|f| f.len() == 2)
+            .map(|f| f.parse::<u64>().unwrap());
         if let (Some(c), false) = (cents, v == 0 && cents.is_some_and(|c| c > 0)) {
             out.words(words);
             out.word(if v == 1 { one } else { many });
@@ -624,8 +652,14 @@ fn number(cs: &[char], mut i: usize, out: &mut Out) -> usize {
         while at(j) == ' ' {
             j += 1;
         }
-        let w: String = cs[j..].iter().take_while(|c| c.is_ascii_alphabetic()).collect();
-        if matches!(w.to_ascii_lowercase().as_str(), "thousand" | "million" | "billion" | "trillion") {
+        let w: String = cs[j..]
+            .iter()
+            .take_while(|c| c.is_ascii_alphabetic())
+            .collect();
+        if matches!(
+            w.to_ascii_lowercase().as_str(),
+            "thousand" | "million" | "billion" | "trillion"
+        ) {
             out.word(&w.to_ascii_lowercase());
             i = j + w.len();
         }
@@ -671,11 +705,19 @@ mod tests {
     #[test]
     fn numbers() {
         assert_eq!(norm("123"), "one hundred twenty three .");
-        assert_eq!(norm("1,234,567"), "one million two hundred thirty four thousand five hundred sixty seven .");
-        assert_eq!(norm("in 1984 and 2005 and 1905 and 1900"),
-            "in nineteen eighty four and two thousand five and nineteen oh five and nineteen hundred .");
+        assert_eq!(
+            norm("1,234,567"),
+            "one million two hundred thirty four thousand five hundred sixty seven ."
+        );
+        assert_eq!(
+            norm("in 1984 and 2005 and 1905 and 1900"),
+            "in nineteen eighty four and two thousand five and nineteen oh five and nineteen hundred ."
+        );
         assert_eq!(norm("the 1990s"), "the nineteen nineties .");
-        assert_eq!(norm("the 21st and 2nd and 40th"), "the twenty first and second and fortieth .");
+        assert_eq!(
+            norm("the 21st and 2nd and 40th"),
+            "the twenty first and second and fortieth ."
+        );
         assert_eq!(norm("3.14"), "three point one four .");
         assert_eq!(norm("$5"), "five dollars .");
         assert_eq!(norm("$1.50"), "one dollar and fifty cents .");
@@ -684,7 +726,10 @@ mod tests {
         assert_eq!(norm("50%"), "fifty percent .");
         assert_eq!(norm("at 3:30 or 4:00"), "at three thirty or four oclock .");
         assert_eq!(norm("pages 5-10"), "pages five to ten .");
-        assert_eq!(norm("call 555-1234"), "call five five five , one two three four .");
+        assert_eq!(
+            norm("call 555-1234"),
+            "call five five five , one two three four ."
+        );
         assert_eq!(norm("it is -5 out"), "it is minus five out .");
         assert_eq!(norm("007"), "zero zero seven .");
     }
@@ -702,9 +747,18 @@ mod tests {
 
     #[test]
     fn abbreviations() {
-        assert_eq!(norm("Mr. Smith met Dr. Jones."), "mister smith met doctor jones .");
-        assert_eq!(norm("St. Paul on Main St. today"), "saint paul on main street today .");
-        assert_eq!(norm("apples, pears, etc. They"), "apples , pears , et cetera . they .");
+        assert_eq!(
+            norm("Mr. Smith met Dr. Jones."),
+            "mister smith met doctor jones ."
+        );
+        assert_eq!(
+            norm("St. Paul on Main St. today"),
+            "saint paul on main street today ."
+        );
+        assert_eq!(
+            norm("apples, pears, etc. They"),
+            "apples , pears , et cetera . they ."
+        );
         assert_eq!(norm("fruit, e.g. apples"), "fruit , for example apples .");
         assert_eq!(norm("John F. Kennedy"), "john <f> kennedy .");
     }
@@ -712,7 +766,10 @@ mod tests {
     #[test]
     fn punctuation() {
         assert_eq!(norm("one (two) three"), "one , two , three .");
-        assert_eq!(norm("one -- two — three - four"), "one , two , three , four .");
+        assert_eq!(
+            norm("one -- two — three - four"),
+            "one , two , three , four ."
+        );
         assert_eq!(norm("well-known"), "well known .");
         assert_eq!(norm("end. (Next)"), "end . next .");
         assert_eq!(norm("(Start) here"), "start , here .");

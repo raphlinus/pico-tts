@@ -1116,7 +1116,11 @@ pub fn render(segs: &[Segment], opts: &Options) -> Vec<KlattParams> {
                 if last.is(Flags::VELAR) && !skip_velar {
                     // The velar F2 locus follows the vowel: F1 for the
                     // lip-rounding and F2 for the fronting part.
-                    let k = if opts.velar_locus == VelarLocus::Narrator { 1. } else { 2. };
+                    let k = if opts.velar_locus == VelarLocus::Narrator {
+                        1.
+                    } else {
+                        2.
+                    };
                     ov[F2] = tg[F2] + (tg[F1] - 300.) * k;
                     ov[F3] = ov[F2] + if cur.is(Flags::LABIAL) { 800. } else { 400. };
                     let kp = match opts.velar_locus {

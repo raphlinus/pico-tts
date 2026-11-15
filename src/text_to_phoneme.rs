@@ -73,7 +73,7 @@ const RAW_RULES: &[&str] = &[
     " [ar]o=xr",
     "[ar]#=Er",
     " ^[as]#=es",
-    " [a]^o=x", // added: about, above, around, another
+    " [a]^o=x",  // added: about, above, around, another
     " [a]^ai=x", // added: again, available
     "[a]wa=x",
     "[aw]=c",
@@ -195,7 +195,7 @@ const RAW_RULES: &[&str] = &[
     " [in]=In",
     "[in]d=An",
     "#:[ier]=iR", // added: earlier, happier (not pier)
-    "[i]ty =I", // added: city, -ity
+    "[i]ty =I",   // added: city, -ity
     "[ier]=ir",
     "#:r[ied] =id",
     "[ied] =Ad",
@@ -233,7 +233,7 @@ const RAW_RULES: &[&str] = &[
     "[mov]=muv",
     "[m]=m",
     "e[ng]+=nJ",
-    "[ng]e =nJ", // added: fringe, hinge, sponge
+    "[ng]e =nJ",  // added: fringe, hinge, sponge
     "[ng]es =nJ", // added: fringes
     "[ng]r=Gg",
     "[ng]#=Gg",
@@ -371,7 +371,7 @@ const RAW_RULES: &[&str] = &[
     "@[u]=u",
     "[u]=yu",
     "[view]=vyu",
-    " [viol]=vAl", // added
+    " [viol]=vAl",  // added
     " [volt]=volt", // added
     "[v]=v",
     " [were]=wR",
@@ -401,7 +401,7 @@ const RAW_RULES: &[&str] = &[
     " :[y]#=A",
     " :[y]^+:#=I",
     " :[y]^#=A",
-    "#[y]#=y", // added: player, beyond (consonant between vowels)
+    "#[y]#=y",  // added: player, beyond (consonant between vowels)
     "aw[y]e=y", // added: lawyer, sawyer
     "[y]=I",
     "[z]=z",
@@ -422,6 +422,7 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("bear", "bER"),
     ("better", "b'EtR"), // only here for stress
     ("british", "br'ItIS"),
+    ("byte", "bAt"),
     ("category", "k'@txgcri"),
     ("certain", "s'Rtxn"),
     ("character", "k'ERxktR"),
@@ -494,11 +495,13 @@ const DICTIONARY: &[(&str, &str)] = &[
     ("online", "anlAn"),
     ("operate", "'cpR\"et"),
     ("panel", "p@nxl"),
+    ("pico", "piko"),
     ("piece", "pis"),
     ("pizza", "pitsx"),
     ("poll", "pol"),
     ("primetime", "prAmtAm"),
     ("private", "pr'Avxt"),
+    ("present", "pr'Ezxnt"),
     ("president", "pr'EzId\"Ent"),
     ("privy", "pr'Ivi"),
     ("profile", "profAl"),
@@ -846,13 +849,13 @@ impl Flags {
 /// pronouns, prepositions, conjunctions and auxiliaries. They get no
 /// lexical stress.
 const FUNCTION_WORDS: &[&str] = &[
-    "a", "an", "the", "this", "that", "these", "those", "some", "any", "no", "every", "each",
-    "i", "me", "my", "you", "your", "he", "him", "his", "she", "her", "it", "its", "we", "us",
-    "our", "they", "them", "their", "who", "whom", "whose", "which", "what", "of", "in", "on",
-    "at", "to", "for", "from", "by", "with", "as", "into", "onto", "upon", "about", "over",
-    "under", "than", "and", "or", "but", "nor", "so", "if", "while", "when", "because", "is",
-    "am", "are", "was", "were", "be", "been", "being", "do", "does", "did", "has", "have", "had",
-    "will", "would", "shall", "should", "can", "could", "may", "might", "must", "not", "there",
+    "a", "an", "the", "this", "that", "these", "those", "some", "any", "no", "every", "each", "i",
+    "me", "my", "you", "your", "he", "him", "his", "she", "her", "it", "its", "we", "us", "our",
+    "they", "them", "their", "who", "whom", "whose", "which", "what", "of", "in", "on", "at", "to",
+    "for", "from", "by", "with", "as", "into", "onto", "upon", "about", "over", "under", "than",
+    "and", "or", "but", "nor", "so", "if", "while", "when", "because", "is", "am", "are", "was",
+    "were", "be", "been", "being", "do", "does", "did", "has", "have", "had", "will", "would",
+    "shall", "should", "can", "could", "may", "might", "must", "not", "there",
 ];
 
 /// An element of a word: one ASCII phoneme with its stress.
@@ -1024,9 +1027,8 @@ const STRESS_SUFFIXES: &[(&str, usize, SuffixStress)] = &[
 ];
 
 /// Unstressed prefixes (when the rules give them a reduced or lax vowel).
-const UNSTRESSED_PREFIXES: &[&str] = &[
-    "be", "de", "re", "pre", "con", "com", "ex", "en", "em", "a",
-];
+const UNSTRESSED_PREFIXES: &[&str] =
+    &["be", "de", "re", "pre", "con", "com", "ex", "en", "em", "a"];
 
 /// Put primary stress on a content word that has none from the
 /// dictionary, using affix rules: stress-determining suffixes (after
@@ -1113,6 +1115,8 @@ const PREFIXES: &[(&str, &str)] = &[
     ("im", "Im"),
     ("over", "ovR"),
     ("under", "^ndR"),
+    ("micro", "mAkro"),
+    ("kilo", "kIlo"),
 ];
 
 /// Suffixes stripped to find a dictionary stem. `None` means the phonemes
@@ -1189,7 +1193,9 @@ impl TextToPhoneme {
             }
         }
         for &(suf, ipa) in SUFFIXES {
-            let Some(stem) = word.strip_suffix(suf) else { continue };
+            let Some(stem) = word.strip_suffix(suf) else {
+                continue;
+            };
             // Not loss → lose + s.
             if suf == "s" && stem.ends_with('s') {
                 continue;
@@ -1197,7 +1203,9 @@ impl TextToPhoneme {
             // Spelled -es only after a sibilant or o (fixes, goes), not
             // honoress.
             if suf == "es"
-                && !["s", "x", "z", "sh", "ch", "o"].iter().any(|e| stem.ends_with(e))
+                && !["s", "x", "z", "sh", "ch", "o"]
+                    .iter()
+                    .any(|e| stem.ends_with(e))
             {
                 continue;
             }
@@ -1251,7 +1259,10 @@ impl TextToPhoneme {
                 let b = stem.as_bytes();
                 // We pass a generic front vowel context in place of the suffix, so "change" instead of "chang".
                 let mut context = "+";
-                let stem = if b[b.len() - 1] == b[b.len() - 2] && !stem.ends_with("ll") && !stem.ends_with("ss") {
+                let stem = if b[b.len() - 1] == b[b.len() - 2]
+                    && !stem.ends_with("ll")
+                    && !stem.ends_with("ss")
+                {
                     context = "";
                     &stem[..stem.len() - 1]
                 } else {
@@ -1261,7 +1272,11 @@ impl TextToPhoneme {
                     eprintln!("{word}: rules on stem \"{stem}{context}\" + -{suf}");
                 }
                 let x = self.translate(&format!(" {stem}{context} "));
-                let ipa = if suf == "ed" { inflection(&x, suf) } else { "IG".into() };
+                let ipa = if suf == "ed" {
+                    inflection(&x, suf)
+                } else {
+                    "IG".into()
+                };
                 return format!("{x}{ipa}");
             }
         }
@@ -1280,7 +1295,7 @@ impl TextToPhoneme {
     /// ([`crate::normalize`]): numbers, acronyms and abbreviations become
     /// words, and punctuation `,` (phrase break), `?` or `.`.
     pub fn to_ascii(&self, text: &str) -> Result<String, String> {
-        use crate::normalize::{normalize, Token, LETTERS};
+        use crate::normalize::{LETTERS, Token, normalize};
         // Words to segments.
         struct Word {
             function: bool,
@@ -1308,7 +1323,10 @@ impl TextToPhoneme {
                             name.push_str(if b"sxh".contains(&l) { "Iz" } else { "z" });
                         }
                         let segs = ascii_to_segs(&name)?;
-                        toks.push(Tok::Word(Word { function: false, segs }));
+                        toks.push(Tok::Word(Word {
+                            function: false,
+                            segs,
+                        }));
                     }
                     continue;
                 }
@@ -1449,7 +1467,8 @@ mod tests {
         ttp.dict.insert("fortunate", "f'crCxnxt");
         ttp.dict.insert("material", "mxt'Irixl");
         assert_eq!(
-            ttp.to_ascii("materialism materialists materialized").unwrap(),
+            ttp.to_ascii("materialism materialists materialized")
+                .unwrap(),
             "C: mxt'IrixlIzxm C: mxt'IrixlIsts C: mxt'IrixlAzd ."
         );
         assert_eq!(

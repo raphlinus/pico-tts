@@ -1,24 +1,19 @@
 # pico-tts
 
-Note: this README is quite obsolete by now. It's now become much closer to an implementation of MITalk.
+An experiment in making a very simple speech synthesizer.
 
-The phoneme representation is now based on [ASCKY] from the DECtalk documentation. Each phoneme gets an ASCII character, using upper and lower case, plus symbols. There's also and implementation of phonet (phonemes to vocal tract model) and an attempt at stress and intonation. It sounds a bit worse than DECtalk but recognizably similar.
+Note: the earlier README text (below) is quite obsolete by now. It's now become much closer to an implementation of MITalk.
+
+The phoneme representation is now based on [ASCKY] from the DECtalk documentation. Each phoneme gets an ASCII character, using upper and lower case, plus symbols. There's also an implementation of phonet (phonemes to vocal tract model) and an attempt at stress and intonation. It sounds a bit worse than DECtalk but recognizably similar.
 
 
 The text to phoneme engine is still based on [Elovitz et al], but with a boost from a dictionary.
 
+```
 cargo run phonet out.wav --text "Your text here"
-
-An experiment in making a very simple speech synthesizer.
-
-
-To run:
-
-```
-cargo run out.wav hello
 ```
 
-On macOS, you can play the generated file using `afplay out.wav`. It wouldn't be hard to wire up sound output using [tinyaudio] or [cpal], but I haven't done so.
+Obsolete text below. TODO: clean this all up.
 
 ## Goals and non-goals
 

@@ -8,14 +8,14 @@ use crate::{
     synth::{Params, Synth},
 };
 
+mod ascii;
+mod f0;
 mod klatt;
 mod lpc;
 mod normalize;
 mod phonemes;
 mod phones;
 mod phonet;
-mod ascii;
-mod f0;
 mod prosod;
 mod sequence;
 mod synth;
@@ -510,7 +510,26 @@ fn main_phonet(args: PhonetCmd) {
             let p = &klatt_params;
             eprintln!(
                 "{:>6} f0 {:4.0} av {:3.0} avs {:3.0} ah {:3.0} af {:3.0} a2-6 {:3.0} {:3.0} {:3.0} {:3.0} {:3.0} ab {:3.0} f1-4 {:4.0} {:4.0} {:4.0} {:4.0} b1-3 {:3.0} {:3.0} {:3.0} fnz {:3.0}",
-                frame_t, p.f0, p.av, p.avs, p.ah, p.af, p.a2, p.a3, p.a4, p.a5, p.a6, p.ab, p.f1, p.f2, p.f3, p.f4, p.b1, p.b2, p.b3, p.fnz
+                frame_t,
+                p.f0,
+                p.av,
+                p.avs,
+                p.ah,
+                p.af,
+                p.a2,
+                p.a3,
+                p.a4,
+                p.a5,
+                p.a6,
+                p.ab,
+                p.f1,
+                p.f2,
+                p.f3,
+                p.f4,
+                p.b1,
+                p.b2,
+                p.b3,
+                p.fnz
             );
             frame_t += phonet::FRAME_TIME;
         }

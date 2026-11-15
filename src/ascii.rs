@@ -137,7 +137,12 @@ fn convert_word(word: &str) -> Result<Vec<String>, String> {
                 }
                 // Unstressed R before a weak vowel loses its syllable
                 // (every, memory), but not before a full vowel (operate).
-                _ if vowel_next(i) && s == 0 && next_phone(i).is_some_and(|c| "iIx".contains(c)) => "RR",
+                _ if vowel_next(i)
+                    && s == 0
+                    && next_phone(i).is_some_and(|c| "iIx".contains(c)) =>
+                {
+                    "RR"
+                }
                 _ => "ER",
             },
             'I' | 'i' | 'E' | 'a' | 'c' | 'o' | 'U' | 'u'
